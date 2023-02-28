@@ -12,7 +12,7 @@ public class FileStateTest {
     @Test
     public void testSerDe() {
         // byte is int from -128 to 127 = 255 positions
-        FileState fs = fileStateGenerator.generateFileState();
+        FileState fs = fileStateGenerator.generateRandomFileState();
         System.out.println("Input: " + fs);
 
         String s = fs.toStringRepresentation();

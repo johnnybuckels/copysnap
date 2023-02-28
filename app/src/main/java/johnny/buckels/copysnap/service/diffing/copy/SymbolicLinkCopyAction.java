@@ -6,8 +6,8 @@ import java.nio.file.Path;
 
 public class SymbolicLinkCopyAction extends AbstractCopyAction {
 
-    public SymbolicLinkCopyAction(Path aliasTarget, Path aliasLocation) {
-        super(aliasTarget, aliasLocation);
+    public SymbolicLinkCopyAction(Path symlinkTarget, Path symlinkLocation) {
+        super(symlinkTarget, symlinkLocation);
     }
 
     @Override
@@ -18,9 +18,9 @@ public class SymbolicLinkCopyAction extends AbstractCopyAction {
 
     @Override
     public String toString() {
-        return "AliasCopyAction{" +
-                "sourceToCopy=" + sourceToCopy +
-                ", destinationToCopyTo=" + destinationToCopyTo +
+        return "SymbolicLinkCopyAction{" +
+                "symlinkTarget=" + sourceToCopy +
+                ", symlinkLocation=" + destinationToCopyTo +
                 '}';
     }
 

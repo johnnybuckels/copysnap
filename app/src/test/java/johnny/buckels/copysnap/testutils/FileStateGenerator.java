@@ -4,7 +4,6 @@ import johnny.buckels.copysnap.model.FileState;
 
 import java.nio.file.Path;
 import java.util.Random;
-import java.util.stream.Collectors;
 
 public class FileStateGenerator {
 
@@ -20,22 +19,33 @@ public class FileStateGenerator {
     /**
      * File state with root "/".
      */
-    public FileState generateFileState() {
-        return generateFileState(Path.of("/"));
+    public FileState generateRandomFileState() {
+        return generateRandomFileState(Path.of("/"));
     }
 
-    public FileState generateFileState(Path root) {
+    public FileState generateRandomFileState(Path root) {
+        return generateRandomFileState(root, rng.nextInt(MAX_PATH_LENGTH + 1));
+    }
+
+    public FileState generateRandomFileState(Path root, int randomPartLength) {
         byte[] bytes = new byte[HASH_SIZE];
         rng.nextBytes(bytes);
         // 97 = 'a', 122 = 'z'
-        Path p = root.resolve(
-                rng.ints(97, 123)
-                        .limit(rng.nextInt(MAX_PATH_LENGTH) + 1)
-                        .mapToObj(Character::toChars)
-                        .map(String::new)
-                        .collect(Collectors.joining("/"))
-        );
+        Path p = root.resolve(getRandomRelativePath(randomPartLength));
         return new FileState(p, bytes);
     }
+
+    /**
+     * @return Path.of("g/a/c/a/a/h/i/").
+     */
+    public Path getRandomRelativePath(int length) {
+        return Path.of("", rng.ints(97, 123)
+                .limit(length)
+                .mapToObj(Character::toChars)
+                .map(String::new)
+                .toArray(String[]::new));
+    }
+
+
 
 }

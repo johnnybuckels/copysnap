@@ -5,6 +5,9 @@ import johnny.buckels.copysnap.model.FileSystemState;
 import johnny.buckels.copysnap.service.logging.AbstractMessageProducer;
 import johnny.buckels.copysnap.service.logging.Message;
 
+import java.util.HashSet;
+import java.util.Set;
+
 public class FileSystemDiffService extends AbstractMessageProducer {
 
     private final FileSystemState newState;
@@ -18,15 +21,24 @@ public class FileSystemDiffService extends AbstractMessageProducer {
     public FileSystemDiff computeDiff() {
         messageConsumer.consumeMessage(Message.info("Determining file differences."));
         FileSystemNode systemDiffTree = FileSystemNode.createNew();
-        int changedCount = 0;
+        int newOrChanged = 0;
+        Set<FileState> remainingOldStates = new HashSet<>(oldState.getStates());
+        // determine changed existing changed files
         for (FileState fileState : newState.getStates()) {
             FileSystemNode newNode = systemDiffTree.insert(fileState.getPath());
-            if (!oldState.contains(fileState)) {
+            if (!remainingOldStates.remove(fileState)) {
                 newNode.markAsChanged();
-                changedCount++;
+                newOrChanged++;
             }
         }
-        messageConsumer.consumeMessage(Message.info("Changed files: " + changedCount));
+        // determine no longer present files
+        int movedDeletedCount = remainingOldStates.size();
+        for (FileState fileState : remainingOldStates) {
+            systemDiffTree.getDeepestKnownAlong(fileState.getPath()).markAsChanged();
+        }
+
+        messageConsumer.consumeMessage(Message.info("New/Changed: %s, Moved/Deleted: %s",
+                newOrChanged, movedDeletedCount));
         return new FileSystemDiff(newState.getRootPath(), oldState.getRootPath(), systemDiffTree);
     }
 

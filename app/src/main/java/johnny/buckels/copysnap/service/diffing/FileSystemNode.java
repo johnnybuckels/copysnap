@@ -54,6 +54,21 @@ public class FileSystemNode {
             return matchingChild.insert(relPath);
     }
 
+    public FileSystemNode getDeepestKnownAlong(Path relPath) {
+        if (relPath.isAbsolute())
+            throw new IllegalArgumentException("Can not process absolute path");
+        if (relPath.equals(value)) {
+            return this;
+        }
+        Path relFromThisToPath = value.relativize(relPath);
+        Path pathToChild = value.resolve(relFromThisToPath.getName(0));
+        FileSystemNode matchingChild = children.get(pathToChild);
+        if (matchingChild == null)
+            return this;
+        else
+            return matchingChild.getDeepestKnownAlong(relPath);
+    }
+
     /**
      * This: (r)
      * Path: a/b/c

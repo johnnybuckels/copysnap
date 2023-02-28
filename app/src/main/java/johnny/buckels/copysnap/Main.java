@@ -21,7 +21,7 @@ import java.util.Properties;
 /**
  * Tool to create lightweight incremental snapshots of a file system.
  */
-@CommandLineInterface(description = "Tool to create differential snapshots of a filesystem.")
+@CommandLineInterface(name = "copysnap", description = "Tool to create differential snapshots of a filesystem.")
 public class Main {
 
     private static final String COPYSNAP_APP_NAME = ".copysnap";
@@ -34,7 +34,6 @@ public class Main {
     private static final Properties APP_PROPERTIES = getAppProperties();
 
     private static final MessageConsumer MESSAGE_CONSUMER = getMessageConsumer();
-    public static final String QUIET_TOOLTIP = "If set, no console output will be printed.";
 
     public static void main(String[] args) {
         CliHats.get(Main.class).execute(args);
@@ -69,6 +68,7 @@ public class Main {
 
     /**
      * Displays information about the currently loaded context.
+     * FIXME: "last snapshot" is not displayed correctly.
      */
     @Command(name = "current")
     public static void getCurrentContextInfo() {
@@ -84,10 +84,11 @@ public class Main {
 
     /**
      * Creates a new snapshot using the currently loaded context.
+     * @param quiet If set, no console output will be printed.
      */
     @Command(name = "create-snapshot")
     public static void createSnapshot(
-            @Option(name = {"-q", "--quiet"}, flagValue = "true", defaultValue = "false", description = QUIET_TOOLTIP) Boolean quiet
+            @Option(name = {"-q", "--quiet"}, flagValue = "true", defaultValue = "false") Boolean quiet
     ) {
         getLatestLoadedContext()
                 .map(c -> c
@@ -102,13 +103,14 @@ public class Main {
     /**
      * Computes the file state of a specified directory and saves it to the current context.
      * This method is intended to repair broken or lost file states of a previous snapshot.
-     * Example: Assume 'sourcename' is the name of the source directory
-     *      copysnap recompute -d /path/to/my/copysnap-home/sourcename-copysnap/2022-11-20-16-21-27/sourcename
+     * Example: "copysnap recompute -d /path/to/my/copysnap-home/sourcename-copysnap/2022-11-20-16-21-27/sourcename"
+     * @param path The directory to compute a new file state of.
+     * @param quiet If set, no console output will be printed.
      */
     @Command(name = "recompute")
     public static void recomputeFileState(
-            @Option(name = {"-d", "--directory"}, necessity = OptionNecessity.REQUIRED, description = "The directory to compute a new file state of.") Path path,
-            @Option(name = {"-q", "--quiet"}, flagValue = "true", defaultValue = "false", description = QUIET_TOOLTIP) Boolean quiet
+            @Option(name = {"-d", "--directory"}, necessity = OptionNecessity.REQUIRED) Path path,
+            @Option(name = {"-q", "--quiet"}, flagValue = "true", defaultValue = "false") Boolean quiet
     ) {
         Path resolvedPath = resolvePathToCwd(path);
         getLatestLoadedContext()

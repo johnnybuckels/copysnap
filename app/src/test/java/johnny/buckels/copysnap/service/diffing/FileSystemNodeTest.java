@@ -108,6 +108,22 @@ public class FileSystemNodeTest {
         assertEquals(rabcdf, r3cNodeInsert.getValue());
     }
 
+    @Test
+    public void insertSubpath_expectNoNewInsertion() {
+        // given
+        FileSystemNode root = FileSystemNode.createNew();
+        Path f = Path.of("r", "a", "b", "c", "d", "e", "f");
+        Path c = Path.of("r", "a", "b", "c");
+
+        // when
+        FileSystemNode fNode = root.insert(f);
+        FileSystemNode cNode = root.insert(c);
+
+        // then
+        assertEquals(c, cNode.getValue());
+        assertEquals(Set.of(fNode), root.getLeafs());
+    }
+
     /**
      * Given: (r)
      *          \-(r/a)
@@ -196,6 +212,37 @@ public class FileSystemNodeTest {
         assertTrue(caNode.isChanged());
         assertFalse(aNode.isChanged());
         assertFalse(bNode.isChanged());
+    }
+
+    @Test
+    public void testFileSystemNode_deepestKnown() {
+        // given
+        FileSystemNode root = FileSystemNode.createNew();
+        FileSystemNode rNode = root.append(Path.of("r"));
+        Path a = Path.of("a");
+        Path b = Path.of("b");
+        Path c = Path.of("c");
+        Path ca = Path.of("ca");
+        FileSystemNode aNode = root.append(a);
+        root.append(b);
+        FileSystemNode cNode = root.append(c);
+        FileSystemNode caNode = cNode.append(ca);
+
+        // when
+        FileSystemNode deepestKnownCa = root.getDeepestKnownAlong(caNode.getValue());
+        FileSystemNode deepestKnownC = root.getDeepestKnownAlong(cNode.getValue());
+        FileSystemNode deepestKnownR = root.getDeepestKnownAlong(rNode.getValue());
+        FileSystemNode deepestKnownEmpty = root.getDeepestKnownAlong(Path.of(""));
+        FileSystemNode unknown = root.getDeepestKnownAlong(Path.of("some/unknown/path"));
+        FileSystemNode unknownAfterA = root.getDeepestKnownAlong(aNode.getValue().resolve("some/deeper/path"));
+
+        // then
+        assertEquals(caNode, deepestKnownCa);
+        assertEquals(cNode, deepestKnownC);
+        assertEquals(rNode, deepestKnownR);
+        assertEquals(root, deepestKnownEmpty);
+        assertEquals(root, unknown);
+        assertEquals(aNode, unknownAfterA);
     }
 
     @Test

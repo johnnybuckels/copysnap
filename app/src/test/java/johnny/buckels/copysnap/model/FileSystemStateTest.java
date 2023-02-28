@@ -31,7 +31,7 @@ public class FileSystemStateTest {
         long start = System.currentTimeMillis();
         Path root = Path.of("/root/path");
         FileSystemState.Builder builder = FileSystemState.builder(root);
-        IntStream.range(0, fileCount).forEach(i -> builder.add(fileStateGenerator.generateFileState(root)));
+        IntStream.range(0, fileCount).forEach(i -> builder.add(fileStateGenerator.generateRandomFileState(root)));
         FileSystemState fst = builder.build();
         long initEnd = System.currentTimeMillis();
 

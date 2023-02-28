@@ -16,7 +16,6 @@ import java.util.Set;
 
 public class FileSystemState {
 
-
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
     private static final char FILE_ENTRY_SEPARATOR_CHAR = Character.MIN_VALUE;
 
@@ -109,14 +108,14 @@ public class FileSystemState {
     }
 
     /**
-     * True if the specified state is contained in this file system state.
+     * @return view of contained states.
      */
-    public boolean contains(FileState fileState) {
-        return states.contains(fileState);
-    }
-
     public Set<FileState> getStates() {
         return Collections.unmodifiableSet(states);
+    }
+
+    public int getFileCount() {
+        return states.size();
     }
 
     /**
@@ -170,8 +169,9 @@ public class FileSystemState {
             this.root = root;
         }
 
-        public void add(FileState fileState) {
+        public Builder add(FileState fileState) {
             states.add(fileState);
+            return this;
         }
 
         public FileSystemState build() {

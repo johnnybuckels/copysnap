@@ -132,4 +132,109 @@ public class FileSystemDiffServiceTest {
         assertEquals(Set.of(expectedCopyAction, expectedAliasAction), copyActions);
     }
 
+    /**
+     * CURRENT
+     * /x/y/z/
+     *  tmp/
+     *      d/
+     *          file.txt (changed)
+     * OLD
+     * /p/q/rold/
+     *  tmp/
+     *      d/
+     *          d2/
+     *              fileOld.txt
+     *          file.txt
+     * EXPECT SNAPSHOT
+     * /p/q/rnew/
+     *  tmp/
+     *      d/
+     *          file.txt (direct copy)
+     */
+    @Test
+    public void test_copyAction_deleteOne_OneChanged_expectCopy() {
+        Path rootNew = Path.of("/x/y/z");
+        Path rootOld = Path.of("/p/q/rold");
+        Path destination = Path.of("/p/q/rnew");
+
+        Path fileOld = Path.of("tmp/d/d2/fileOld.txt");
+        Path fileChanged = Path.of("tmp/d/file.txt");
+
+
+        // and given: new (current) file state
+        FileState hashFileChangedCurrent = new FileState(fileChanged, new byte[] {9});
+        FileSystemState.Builder builderNew = FileSystemState.builder(rootNew);
+        builderNew.add(hashFileChangedCurrent);
+        FileSystemState fssNew = builderNew.build();
+
+        // and given: old file state
+        FileState hashFileOld = new FileState(fileOld, new byte[] {0});
+        FileState hashFileChanged = new FileState(fileChanged, new byte[] {0});
+        FileSystemState.Builder builderOld = FileSystemState.builder(rootOld);
+        builderOld.add(hashFileOld);
+        builderOld.add(hashFileChanged);
+        FileSystemState fssOld = builderOld.build();
+
+        // when
+        FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fssNew, fssOld);
+        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff();
+        Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination);
+
+        // then
+        Path expectedCopySource =  Path.of("/x/y/z/tmp/d/file.txt");
+        Path expectedCopyTarget =  Path.of("/p/q/rnew/tmp/d/file.txt");
+        CopyAction expectedCopyAction = new PlainCopyAction(expectedCopySource, expectedCopyTarget);
+
+        assertEquals(Set.of(expectedCopyAction), copyActions);
+    }
+
+    /**
+     * CURRENT
+     * /x/y/z/
+     *  tmp/
+     *      d/
+     *          file.txt (unchanged)
+     * OLD
+     * /p/q/rold/
+     *  tmp/
+     *      d/
+     *          d2/
+     *              fileOld.txt
+     *          file.txt
+     * EXPECT SNAPSHOT
+     * /p/q/rnew/
+     *  tmp/
+     *      d/
+     *          file.txt (direct copy)
+     */
+    @Test
+    public void test_copyAction_deleteOne_RemainingUnChanged_expectAliasCopyOnFiles() {
+        Path unchangedFile = Path.of("tmp/d/file.txt");
+        FileSystemState current = FileSystemState.builder(Path.of("/x/y/z"))
+                .add(new FileState(unchangedFile, new byte[] {1}))
+                .build();
+
+        Path rootOld = Path.of("/p/q/rold");
+        FileSystemState old = FileSystemState.builder(rootOld)
+                .add(new FileState(unchangedFile, new byte[] {1}))
+                .add(new FileState(Path.of("tmp/d/d2/fileOld.txt"), new byte[] {1}))
+                .build();
+
+        // when
+        Path destination = Path.of("/p/q/rnew");
+        FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(current, old);
+        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff();
+        Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination);
+
+        // then
+        Path expectedSymlinkTarget =  rootOld.resolve(unchangedFile);
+        Path expectedSymlinkLocation =  destination.resolve(unchangedFile);
+        CopyAction expectedCopyAction = new SymbolicLinkCopyAction(expectedSymlinkTarget, expectedSymlinkLocation);
+
+        assertEquals(Set.of(expectedCopyAction), copyActions);
+    }
+
+
+
+
 }
