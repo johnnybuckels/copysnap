@@ -14,7 +14,7 @@ public class FileSystemNodeTest {
     @Test
     public void testFileSystemNode_appendSingleName() {
         // given
-        FileSystemNode root = FileSystemNode.createNew();
+        FileSystemNode root = FileSystemNode.getNew();
         // when
         Path ra = Path.of("r", "a");
         FileSystemNode aNode = root.append(ra);
@@ -32,7 +32,7 @@ public class FileSystemNodeTest {
     @Test
     public void testFileSystemNode_appendPath() {
         // given
-        FileSystemNode root = FileSystemNode.createNew();
+        FileSystemNode root = FileSystemNode.getNew();
         Path rabc = Path.of("r", "a", "b", "c");
 
         // when
@@ -49,7 +49,7 @@ public class FileSystemNodeTest {
     @Test
     public void testFileSystemNode_insert() {
         // given
-        FileSystemNode root = FileSystemNode.createNew();
+        FileSystemNode root = FileSystemNode.getNew();
         Path r = Path.of("r");
         Path a = Path.of("r", "a");
         Path b = Path.of("r", "b");
@@ -84,7 +84,7 @@ public class FileSystemNodeTest {
         // given
         Path rabc = Path.of("r", "a", "b", "c");
         Supplier<FileSystemNode> newTreeSupplier = () -> {
-            FileSystemNode root = FileSystemNode.createNew();
+            FileSystemNode root = FileSystemNode.getNew();
             root.insert(rabc);
             return root;
         };
@@ -111,7 +111,7 @@ public class FileSystemNodeTest {
     @Test
     public void insertSubpath_expectNoNewInsertion() {
         // given
-        FileSystemNode root = FileSystemNode.createNew();
+        FileSystemNode root = FileSystemNode.getNew();
         Path f = Path.of("r", "a", "b", "c", "d", "e", "f");
         Path c = Path.of("r", "a", "b", "c");
 
@@ -139,7 +139,7 @@ public class FileSystemNodeTest {
     @Test
     public void testFileSystemNode_insert2() {
         // given
-        FileSystemNode root = FileSystemNode.createNew();
+        FileSystemNode root = FileSystemNode.getNew();
         root.insert(Path.of("r", "a"));
         root.insert(Path.of("r", "b"));
         FileSystemNode cNode = root.insert(Path.of("r", "c"));
@@ -162,7 +162,7 @@ public class FileSystemNodeTest {
     @Test
     public void testFileSystemNode_insertMultiplePaths() {
         // given
-        FileSystemNode root = FileSystemNode.createNew();
+        FileSystemNode root = FileSystemNode.getNew();
 
         // when
         Path rafP = Path.of("r/a/f");
@@ -192,7 +192,7 @@ public class FileSystemNodeTest {
     @Test
     public void testFileSystemNode_changed() {
         // given
-        FileSystemNode root = FileSystemNode.createNew()
+        FileSystemNode root = FileSystemNode.getNew()
                 .append(Path.of("r"));
         Path a = Path.of("a");
         Path b = Path.of("b");
@@ -217,7 +217,7 @@ public class FileSystemNodeTest {
     @Test
     public void testFileSystemNode_deepestKnown() {
         // given
-        FileSystemNode root = FileSystemNode.createNew();
+        FileSystemNode root = FileSystemNode.getNew();
         FileSystemNode rNode = root.append(Path.of("r"));
         Path a = Path.of("a");
         Path b = Path.of("b");
@@ -248,7 +248,7 @@ public class FileSystemNodeTest {
     @Test
     public void testFileSystemNode_uppermostUnchanged() {
         // given
-        FileSystemNode root = FileSystemNode.createNew()
+        FileSystemNode root = FileSystemNode.getNew()
                 .append(Path.of("r"));
         Path a = Path.of("a");
         Path aa = Path.of("aa");
@@ -273,7 +273,7 @@ public class FileSystemNodeTest {
     @Test
     public void testFileSystemNode_uppermostUnchanged_whenNothingChanged() {
         // given
-        FileSystemNode root = FileSystemNode.createNew();
+        FileSystemNode root = FileSystemNode.getNew();
         Path rabcf = Path.of("r", "a", "b", "c", "f");
         FileSystemNode fNode = root.insert(rabcf);
 
@@ -296,7 +296,7 @@ public class FileSystemNodeTest {
     @Test
     public void testFileSystemNode_leafs_empty() {
         // given
-        FileSystemNode root = FileSystemNode.createNew();
+        FileSystemNode root = FileSystemNode.getNew();
         FileSystemNode aNode = root.insert(Path.of("r", "a"));
         FileSystemNode bNode = root.insert(Path.of("r", "b"));
         FileSystemNode dNode = root.insert(Path.of("r", "c", "d"));

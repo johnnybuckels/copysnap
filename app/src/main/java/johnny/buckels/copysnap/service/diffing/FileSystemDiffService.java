@@ -20,7 +20,7 @@ public class FileSystemDiffService extends AbstractMessageProducer {
 
     public FileSystemDiff computeDiff() {
         messageConsumer.consumeMessage(Message.info("Determining file differences."));
-        FileSystemNode systemDiffTree = FileSystemNode.createNew();
+        FileSystemNode systemDiffTree = FileSystemNode.getNew();
         int newOrChanged = 0;
         Set<FileState> remainingOldStates = new HashSet<>(oldState.getStates());
         // determine changed existing changed files

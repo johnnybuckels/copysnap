@@ -13,12 +13,12 @@ public class FileSystemNode {
 
     private boolean changed = false;
 
-    public static FileSystemNode createNew() {
-        return new FileSystemNode(ROOT_PATH);
+    public static FileSystemNode getNew() {
+        return new FileSystemNode();
     }
 
-    FileSystemNode(Path value) {
-        this(value, null);
+    FileSystemNode() {
+        this(FileSystemNode.ROOT_PATH, null);
     }
 
     FileSystemNode(Path value, FileSystemNode parent) {
