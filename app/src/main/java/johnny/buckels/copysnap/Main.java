@@ -1,10 +1,10 @@
 package johnny.buckels.copysnap;
 
-import de.jb.clihats.processor.annotations.Command;
-import de.jb.clihats.processor.annotations.CommandLineInterface;
-import de.jb.clihats.processor.annotations.Option;
-import de.jb.clihats.processor.annotations.OptionNecessity;
-import de.jb.clihats.processor.execution.CliHats;
+import io.github.johannesbuchholz.clihats.processor.annotations.Command;
+import io.github.johannesbuchholz.clihats.processor.annotations.CommandLineInterface;
+import io.github.johannesbuchholz.clihats.processor.annotations.Option;
+import io.github.johannesbuchholz.clihats.processor.annotations.OptionNecessity;
+import io.github.johannesbuchholz.clihats.processor.execution.CliHats;
 import johnny.buckels.copysnap.model.Context;
 import johnny.buckels.copysnap.model.Contexts;
 import johnny.buckels.copysnap.service.logging.DefaultMessageConsumer;
