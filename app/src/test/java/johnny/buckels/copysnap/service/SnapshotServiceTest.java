@@ -25,7 +25,7 @@ public class SnapshotServiceTest {
 //    @Test
     public void generateSnapshotTest_fromContext() {
         Context context = Contexts.createNew(TEST_PATH, TEST_PATH_SNAPSHOTS);
-        context.createSnapshot();
+        context.createSnapshot(1);
     }
 
 }

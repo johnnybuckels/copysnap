@@ -25,14 +25,7 @@ public class Context extends AbstractMessageProducer {
         this.properties = properties;
     }
 
-    public Path createSnapshot() {
-        return createSnapshot(1);
-    }
-
-    /**
-     * @return the path to the newly created snapshot
-     */
-    public Path createSnapshot(int threadCount) {
+    public void createSnapshot(int threadCount) {
         FileSystemState newState = computeFileSystemState(properties.getSourceDir(), threadCount);
         Path newSnapshotDir = properties.getSnapshotsHomeDir().resolve(generateSnapshotName());
 
@@ -41,14 +34,6 @@ public class Context extends AbstractMessageProducer {
         snapshotService.createNewSnapshot(newSnapshotDir);
         writeLatestFileSystemState(newState.switchRootTo(newSnapshotDir));
         properties = properties.getNewUpdated(newSnapshotDir);
-        return newSnapshotDir;
-    }
-
-    /**
-     * @see #recomputeFileSystemState(Path, int)
-     */
-    public void recomputeFileSystemState(Path sourceDir) {
-        recomputeFileSystemState(sourceDir, 1);
     }
 
     /**
