@@ -39,7 +39,7 @@ public class SnapshotService extends AbstractMessageProducer {
         FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff();
 
         Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination);
-        messageConsumer.consumeMessage(Message.info("Creating files."));
+        messageConsumer.consumeMessage(Message.info("Writing snapshot."));
         int performedCount = 0;
         for (CopyAction copyAction : copyActions) {
             try {

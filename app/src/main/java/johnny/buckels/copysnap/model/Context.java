@@ -6,6 +6,8 @@ import johnny.buckels.copysnap.service.logging.AbstractMessageProducer;
 import johnny.buckels.copysnap.service.logging.Message;
 import johnny.buckels.copysnap.service.logging.MessageConsumer;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.ZonedDateTime;
@@ -14,59 +16,50 @@ import java.util.Objects;
 
 public class Context extends AbstractMessageProducer {
 
+    static final String CONTEXT_PROPERTIES_FILE_NAME = "context.properties";
     private static final String LATEST_FILE_STATE_FILE_NAME = ".latest";
 
-    private final Path sourceDir;
-    private final Path homeDir;
-    private final ZonedDateTime created;
-    private ZonedDateTime lastSnapshot;
+    private ContextProperties properties;
 
-    private double cpuParallelism = 1.0;
+    Context(ContextProperties properties) {
+        this.properties = properties;
+    }
 
-    Context(Path sourceDir, Path homeDir, ZonedDateTime created, ZonedDateTime lastSnapshot) {
-        this.sourceDir = sourceDir;
-        this.homeDir = homeDir;
-        this.created = created;
-        this.lastSnapshot = lastSnapshot;
+    public Path createSnapshot() {
+        return createSnapshot(1);
     }
 
     /**
      * @return the path to the newly created snapshot
      */
-    public Path createSnapshot() {
-        FileSystemState newState = computeFileSystemState(sourceDir);
-        Path newSnapshotDir = homeDir.resolve(generateSnapshotName());
+    public Path createSnapshot(int threadCount) {
+        FileSystemState newState = computeFileSystemState(properties.getSourceDir(), threadCount);
+        Path newSnapshotDir = properties.getSnapshotsHomeDir().resolve(generateSnapshotName());
 
         SnapshotService snapshotService = new SnapshotService(newState, loadLatestFileSystemState());
         snapshotService.setMessageConsumer(messageConsumer);
         snapshotService.createNewSnapshot(newSnapshotDir);
-        lastSnapshot = ZonedDateTime.now();
         writeLatestFileSystemState(newState.switchRootTo(newSnapshotDir));
+        properties = properties.getNewUpdated(newSnapshotDir);
         return newSnapshotDir;
     }
 
     /**
-     * Intended to reproduce a file system state of an older snapshot or to repair a broken file system state.
+     * @see #recomputeFileSystemState(Path, int)
      */
-    public void recomputeFileSystemStateAndSave(Path sourceDir) {
-        FileSystemState fileSystemState = computeFileSystemState(sourceDir);
+    public void recomputeFileSystemState(Path sourceDir) {
+        recomputeFileSystemState(sourceDir, 1);
+    }
+
+    /**
+     * Intended to reproduce a file system state of an older snapshot or to repair a broken file system state.
+     * @param sourceDir The directory to compute the new state from.
+     * @param threadCount The amount of threads to use when computing hashes.
+     */
+    public void recomputeFileSystemState(Path sourceDir, int threadCount) {
+        FileSystemState fileSystemState = computeFileSystemState(sourceDir, threadCount);
+        properties = properties.getNewUpdated(fileSystemState.getRootPath());
         writeLatestFileSystemState(fileSystemState);
-    }
-
-    public Path getSourceDir() {
-        return sourceDir;
-    }
-
-    public Path getHomeDir() {
-        return homeDir;
-    }
-
-    public ZonedDateTime getCreated() {
-        return created;
-    }
-
-    public ZonedDateTime getLastSnapshot() {
-        return lastSnapshot;
     }
 
     public Context withMessageConsumer(MessageConsumer messageConsumer) {
@@ -74,13 +67,28 @@ public class Context extends AbstractMessageProducer {
         return this;
     }
 
-    public Context withCpuParallelism(double cpuParallelism) {
-        this.cpuParallelism = cpuParallelism;
-        return this;
+    /**
+     * @return The path to the saved context properties file.
+     * @throws UncheckedIOException if writing fails.
+     */
+    public Path writeProperties() {
+        Path snapshotsHomeDir = properties.getSnapshotsHomeDir();
+        Path destination = snapshotsHomeDir.resolve(CONTEXT_PROPERTIES_FILE_NAME);
+        try {
+            Files.createDirectories(snapshotsHomeDir);
+            properties.write(destination);
+        } catch (IOException e) {
+            throw new UncheckedIOException(String.format("Could not save context properties for context at %s: %s", snapshotsHomeDir, e.getMessage()), e);
+        }
+        return destination;
     }
 
-    private FileSystemState computeFileSystemState(Path sourceDir) {
-        ParallelHashingService parallelHashingService = new ParallelHashingService(computePoolSize());
+    public String toDisplayString() {
+        return properties.toDisplayString();
+    }
+
+    private FileSystemState computeFileSystemState(Path sourceDir, int threadCount) {
+        ParallelHashingService parallelHashingService = new ParallelHashingService(threadCount);
         parallelHashingService.setMessageConsumer(messageConsumer);
         return parallelHashingService.computeState(sourceDir);
     }
@@ -91,14 +99,13 @@ public class Context extends AbstractMessageProducer {
 
     private FileSystemState loadLatestFileSystemState() {
         messageConsumer.consumeMessage(Message.info("Loading latest file system state."));
-        Path latestSnapshotFile = homeDir.resolve(LATEST_FILE_STATE_FILE_NAME);
+        Path latestSnapshotFile = properties.getSnapshotsHomeDir().resolve(LATEST_FILE_STATE_FILE_NAME);
         if (Files.isRegularFile(latestSnapshotFile)) {
             FileSystemState fileSystemState = FileSystemState.read(latestSnapshotFile);
             messageConsumer.consumeMessage(Message.info("Successfully loaded snapshot "
                     + fileSystemState.getCreated().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)));
             return fileSystemState;
-        }
-        else {
+        } else {
             messageConsumer.consumeMessage(Message.info("No latest file system state found."));
             return FileSystemState.empty();
         }
@@ -106,18 +113,7 @@ public class Context extends AbstractMessageProducer {
 
     private void writeLatestFileSystemState(FileSystemState fileSystemState) {
         messageConsumer.consumeMessage(Message.info("Writing latest file system state."));
-        fileSystemState.writeTo(homeDir.resolve(LATEST_FILE_STATE_FILE_NAME));
-    }
-
-    private int computePoolSize() {
-        return (int) Math.round(Math.max(1, Runtime.getRuntime().availableProcessors() * Math.min(1, cpuParallelism)));
-    }
-
-    public String toDisplayString() {
-        return String.format("%16s: %s", "source", sourceDir) +
-                "\n" + String.format("%16s: %s", "home", homeDir) +
-                "\n" + String.format("%16s: %s", "created", created.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)) +
-                "\n" + String.format("%16s: %s", "last snapshot", lastSnapshot == null ? "" : lastSnapshot.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
+        fileSystemState.writeTo(properties.getSnapshotsHomeDir().resolve(LATEST_FILE_STATE_FILE_NAME));
     }
 
 }

@@ -33,7 +33,7 @@ public class Main {
     private static final String PARALLELISM_PROPERTY_NAME = "cpu.parallelism";
     private static final Properties APP_PROPERTIES = getAppProperties();
 
-    private static final MessageConsumer MESSAGE_CONSUMER = getMessageConsumer();
+    private static final MessageConsumer MESSAGE_CONSUMER = newMessageConsumer();
 
     public static void main(String[] args) {
         CliHats.get(Main.class).execute(args);
@@ -41,101 +41,143 @@ public class Main {
 
     /**
      * Initialises a new copy snap context sourcing the specified directory.
+     * @param source The directory to take snapshots from.
      */
-    @Command(name = "init")
-    public static void initContext(
-            @Option(name = {"-s", "--source"}, necessity = OptionNecessity.REQUIRED, description = "The directory to take snapshots from.") Path sourceDir
+    @Command
+    public static void init(
+            @Option(necessity = OptionNecessity.REQUIRED, position = 0) Path source
     ) {
         Path cwd = Path.of(System.getProperty("user.dir"));
-        Path sourceDirResolved = resolvePathToCwd(sourceDir);
+        Path sourceDirResolved = resolvePathToCwd(source);
         Context context = Contexts.createNew(sourceDirResolved, cwd);
-        saveContextAndAppProperties(context);
+
+        Path contextPropertiesPath = context.writeProperties();
+        saveContextAndAppProperties(contextPropertiesPath);
+
         MESSAGE_CONSUMER.consumeMessage(Message.info("Initialised context"));
         MESSAGE_CONSUMER.consumeMessage(Message.info(context.toDisplayString()));
     }
 
     /**
      * Loads a context.
+     * @param path The path to the home directory of a context or its properties file.
      */
     @Command(name = "load")
-    public static void load(@Option(name = {"-p", "--path"}, necessity = OptionNecessity.REQUIRED, description = "The path to the home directory of a context or its properties files.") Path searchPath) {
-        Path searchPathResolved = resolvePathToCwd(searchPath);
-        Context context = Contexts.findPropertiesAndLoadContext(searchPathResolved);
-        saveContextAndAppProperties(context);
+    public static void load(
+            @Option(necessity = OptionNecessity.REQUIRED, position = 0) Path path
+    ) {
+        Path searchPathResolved = resolvePathToCwd(path);
+        Context context = Contexts.load(searchPathResolved);
+
+        Path contextPropertiesPath = context.writeProperties();
+        saveContextAndAppProperties(contextPropertiesPath);
+
         MESSAGE_CONSUMER.consumeMessage(Message.info("Loaded context"));
         MESSAGE_CONSUMER.consumeMessage(Message.info(context.toDisplayString()));
     }
 
     /**
      * Displays information about the currently loaded context.
-     * FIXME: "last snapshot" is not displayed correctly.
      */
-    @Command(name = "current")
-    public static void getCurrentContextInfo() {
-        getLatestLoadedContext()
-                .ifPresentOrElse(
-                        context -> {
-                            MESSAGE_CONSUMER.consumeMessage(Message.info("Current context"));
-                            MESSAGE_CONSUMER.consumeMessage(Message.info(context.toDisplayString()));
-                        },
-                        () -> MESSAGE_CONSUMER.consumeMessage(Message.info("No context loaded."))
-                );
+    @Command
+    public static void status() {
+        Optional<Context> contextOpt = getLatestLoadedContext();
+        if (contextOpt.isEmpty()) {
+            MESSAGE_CONSUMER.consumeMessage(Message.info("No context loaded."));
+            return;
+        }
+        Context context = contextOpt.get();
+
+        MESSAGE_CONSUMER.consumeMessage(Message.info("Current context"));
+        MESSAGE_CONSUMER.consumeMessage(Message.info(context.toDisplayString()));
     }
 
     /**
      * Creates a new snapshot using the currently loaded context.
      * @param quiet If set, no console output will be printed.
      */
-    @Command(name = "create-snapshot")
-    public static void createSnapshot(
-            @Option(name = {"-q", "--quiet"}, flagValue = "true", defaultValue = "false") Boolean quiet
+    @Command
+    public static void snapshot(
+            @Option(flagValue = "true", defaultValue = "false") Boolean quiet
     ) {
-        getLatestLoadedContext()
-                .map(c -> c
-                        .withMessageConsumer(quiet ? MessageConsumer.quiet() : MESSAGE_CONSUMER)
-                        .withCpuParallelism(Double.parseDouble((String) APP_PROPERTIES.getOrDefault(PARALLELISM_PROPERTY_NAME, "1.0"))))
-                .ifPresentOrElse(
-                        Context::createSnapshot,
-                        () -> MESSAGE_CONSUMER.consumeMessage(Message.info("No context loaded."))
-                );
+        Optional<Context> contextOpt = getLatestLoadedContext();
+        if (contextOpt.isEmpty()) {
+            MESSAGE_CONSUMER.consumeMessage(Message.info("No context loaded."));
+            return;
+        }
+        Context context = contextOpt.get().withMessageConsumer(quiet ? MessageConsumer.quiet() : MESSAGE_CONSUMER);
+        context.createSnapshot(computeThreadCount());
+
+        Path contextPropertiesPath = context.writeProperties();
+        saveContextAndAppProperties(contextPropertiesPath);
+    }
+
+    /**
+     * Loads only essential parameters from the specified path. Other parameters are reset. This method call should be
+     * followed up by 'recompute' as the latest file system state dropped.
+     * This is useful for resolving compatibility issues between versions of context.properties files and CopySnap.
+     * @param path The path to the home directory of a context or its properties file.
+     */
+    @Command
+    public static void repair(
+            @Option(necessity = OptionNecessity.REQUIRED, position = 0) Path path
+    ) {
+        Path resolvePath = resolvePathToCwd(path);
+        Context context = Contexts.repairAndLoad(resolvePath);
+
+        Path contextPropertiesPath = context.writeProperties();
+        saveContextAndAppProperties(contextPropertiesPath);
+
+        MESSAGE_CONSUMER.consumeMessage(Message.info("Repaired context."));
+        MESSAGE_CONSUMER.consumeMessage(Message.info(context.toDisplayString()));
     }
 
     /**
      * Computes the file state of a specified directory and saves it to the current context.
-     * This method is intended to repair broken or lost file states of a previous snapshot.
-     * Example: "copysnap recompute -d /path/to/my/copysnap-home/sourcename-copysnap/2022-11-20-16-21-27/sourcename"
-     * @param path The directory to compute a new file state of.
+     * This method intends to repair a broken or lost file state of a previous snapshot.
+     * @param directory The directory to compute a new file state of.
      * @param quiet If set, no console output will be printed.
      */
-    @Command(name = "recompute")
-    public static void recomputeFileState(
-            @Option(name = {"-d", "--directory"}, necessity = OptionNecessity.REQUIRED) Path path,
-            @Option(name = {"-q", "--quiet"}, flagValue = "true", defaultValue = "false") Boolean quiet
+    @Command
+    public static void recompute(
+            @Option(necessity = OptionNecessity.REQUIRED, position = 0) Path directory,
+            @Option(flagValue = "true", defaultValue = "false") Boolean quiet
     ) {
-        Path resolvedPath = resolvePathToCwd(path);
-        getLatestLoadedContext()
-                .map(c -> c
-                        .withMessageConsumer(quiet ? MessageConsumer.quiet() : MESSAGE_CONSUMER)
-                        .withCpuParallelism(Double.parseDouble((String) APP_PROPERTIES.getOrDefault(PARALLELISM_PROPERTY_NAME, "1.0"))))
-                .ifPresentOrElse(
-                        c -> c.recomputeFileSystemStateAndSave(resolvedPath),
-                        () -> MESSAGE_CONSUMER.consumeMessage(Message.info("No context loaded."))
-                );
+        Path resolvedPath = resolvePathToCwd(directory);
+        Optional<Context> contextOpt = getLatestLoadedContext();
+        if (contextOpt.isEmpty()) {
+            MESSAGE_CONSUMER.consumeMessage(Message.info("No context loaded."));
+            return;
+        }
+        Context context = contextOpt.get().withMessageConsumer(quiet ? MessageConsumer.quiet() : MESSAGE_CONSUMER);
+        context.recomputeFileSystemState(resolvedPath, computeThreadCount());
+
+        Path contextPropertiesPath = context.writeProperties();
+        saveContextAndAppProperties(contextPropertiesPath);
+    }
+
+    /**
+     * @return integer from [0, Runtime.getRuntime().availableProcessors()] according to specified parallelism.
+     */
+    private static int computeThreadCount() {
+        Double parallelism = Optional.ofNullable((String) APP_PROPERTIES.get(PARALLELISM_PROPERTY_NAME)).map(Double::parseDouble).orElse(1.);
+        return (int) Math.round(Math.max(1, Runtime.getRuntime().availableProcessors() * Math.min(1, parallelism)));
     }
 
     private static Optional<Context> getLatestLoadedContext() {
         return Optional.ofNullable((String) APP_PROPERTIES.get(CURRENT_CONTEXT_PROPERTY_NAME))
                 .filter(s -> !s.isBlank())
                 .map(Path::of)
-                .map(Contexts::findPropertiesAndLoadContext);
+                .map(Contexts::load);
     }
 
-    private static MessageConsumer getMessageConsumer() {
+    private static MessageConsumer newMessageConsumer() {
         Console console = System.console();
-        if (console != null)
+        if (console != null) {
             return new DefaultMessageConsumer(console.writer());
-        else
+        } else {
             return new DefaultMessageConsumer();
+        }
     }
 
     private static Properties getAppProperties() {
@@ -150,7 +192,7 @@ public class Main {
                 }
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("Could not load properties", e);
+            throw new UncheckedIOException("Could not load properties: " + e.getMessage(), e);
         }
         return properties;
     }
@@ -158,13 +200,12 @@ public class Main {
     /**
      * Saves context properties to its home directory as well as in the user's copysnap properties file.
      */
-    private static void saveContextAndAppProperties(Context context) {
-        Path path = Contexts.saveContextProperties(context);
-        APP_PROPERTIES.put(CURRENT_CONTEXT_PROPERTY_NAME, path.toString());
+    private static void saveContextAndAppProperties(Path latestContextPath) {
+        APP_PROPERTIES.put(CURRENT_CONTEXT_PROPERTY_NAME, latestContextPath.toString());
         try {
             writeAppProperties();
         } catch (IOException e) {
-            throw new UncheckedIOException("Could not update app properties", e);
+            throw new UncheckedIOException("Could not update app properties: " + e.getMessage(), e);
         }
     }
 
