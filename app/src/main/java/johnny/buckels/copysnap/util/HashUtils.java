@@ -11,7 +11,7 @@ import java.security.NoSuchAlgorithmException;
 public class HashUtils {
 
     private static final String DIGEST_ALGO = "MD5";
-    private static final int BUFFER_SIZE = 512;
+    private static final int BUFFER_SIZE = 8192;  // 8 kb
 
     /**
      * @return a hash for the contents of the file at the specified path.

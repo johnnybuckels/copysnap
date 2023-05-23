@@ -15,6 +15,8 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.time.Duration;
+import java.time.ZonedDateTime;
 import java.util.Optional;
 import java.util.Properties;
 
@@ -36,7 +38,9 @@ public class Main {
     private static final MessageConsumer MESSAGE_CONSUMER = newMessageConsumer();
 
     public static void main(String[] args) {
+        ZonedDateTime start = ZonedDateTime.now();
         CliHats.get(Main.class).execute(args);
+        System.out.println("Executing CopySnap command took " + Duration.between(start, ZonedDateTime.now()).toMillis() + "ms");
     }
 
     /**

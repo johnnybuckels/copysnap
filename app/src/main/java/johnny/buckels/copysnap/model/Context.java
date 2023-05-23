@@ -83,7 +83,6 @@ public class Context extends AbstractMessageProducer {
     }
 
     private FileSystemState loadLatestFileSystemState() {
-        messageConsumer.consumeMessage(Message.info("Loading latest file system state."));
         Path latestSnapshotFile = properties.getSnapshotsHomeDir().resolve(LATEST_FILE_STATE_FILE_NAME);
         if (Files.isRegularFile(latestSnapshotFile)) {
             FileSystemState fileSystemState = FileSystemState.read(latestSnapshotFile);
@@ -97,7 +96,6 @@ public class Context extends AbstractMessageProducer {
     }
 
     private void writeLatestFileSystemState(FileSystemState fileSystemState) {
-        messageConsumer.consumeMessage(Message.info("Writing latest file system state."));
         fileSystemState.writeTo(properties.getSnapshotsHomeDir().resolve(LATEST_FILE_STATE_FILE_NAME));
     }
 
