@@ -7,7 +7,7 @@ import io.github.johannesbuchholz.clihats.processor.annotations.OptionNecessity;
 import io.github.johannesbuchholz.clihats.processor.execution.CliHats;
 import johnny.buckels.copysnap.model.Context;
 import johnny.buckels.copysnap.model.Contexts;
-import johnny.buckels.copysnap.service.logging.DefaultMessageConsumer;
+import johnny.buckels.copysnap.service.logging.ConcurrentMessageConsumer;
 import johnny.buckels.copysnap.service.logging.Message;
 import johnny.buckels.copysnap.service.logging.MessageConsumer;
 
@@ -29,10 +29,9 @@ public class Main {
     private static final String COPYSNAP_APP_NAME = ".copysnap";
     private static final String COPYSNAP_PROPERTIES_FILENAME = "copysnap.properties";
     private static final Path COPYSNAP_HOME_DIR=  Path.of(System.getProperty("user.home")).resolve(COPYSNAP_APP_NAME);
-    private static final Path COPYSNAP_DEFAULT_PROPERTIES=  COPYSNAP_HOME_DIR.resolve(COPYSNAP_PROPERTIES_FILENAME);
+    private static final Path COPYSNAP_APP_PROPERTIES = COPYSNAP_HOME_DIR.resolve(COPYSNAP_PROPERTIES_FILENAME);
     
     private static final String CURRENT_CONTEXT_PROPERTY_NAME = "contexts.current";
-    private static final String PARALLELISM_PROPERTY_NAME = "cpu.parallelism";
     private static final Properties APP_PROPERTIES = getAppProperties();
 
     private static final MessageConsumer MESSAGE_CONSUMER = newMessageConsumer();
@@ -40,11 +39,12 @@ public class Main {
     public static void main(String[] args) {
         ZonedDateTime start = ZonedDateTime.now();
         CliHats.get(Main.class).execute(args);
-        System.out.println("Executing CopySnap command took " + Duration.between(start, ZonedDateTime.now()).toMillis() + "ms");
+        MESSAGE_CONSUMER.consumeMessage(Message.info("Executing CopySnap command took %s ms", Duration.between(start, ZonedDateTime.now()).toMillis()));
+        MESSAGE_CONSUMER.close();
     }
 
     /**
-     * Initialises a new copy snap context sourcing the specified directory.
+     * Initialises a new CopySnap context sourcing the specified directory.
      * @param source The directory to take snapshots from.
      */
     @Command
@@ -94,6 +94,7 @@ public class Main {
 
         MESSAGE_CONSUMER.consumeMessage(Message.info("Current context"));
         MESSAGE_CONSUMER.consumeMessage(Message.info(context.toDisplayString()));
+        MESSAGE_CONSUMER.consumeMessage(Message.info("CopySnap properties: " + COPYSNAP_APP_PROPERTIES));
     }
 
     /**
@@ -110,7 +111,7 @@ public class Main {
             return;
         }
         Context context = contextOpt.get().withMessageConsumer(quiet ? MessageConsumer.quiet() : MESSAGE_CONSUMER);
-        context.createSnapshot(computeThreadCount());
+        context.createSnapshot();
 
         Path contextPropertiesPath = context.writeProperties();
         saveContextAndAppProperties(contextPropertiesPath);
@@ -154,18 +155,10 @@ public class Main {
             return;
         }
         Context context = contextOpt.get().withMessageConsumer(quiet ? MessageConsumer.quiet() : MESSAGE_CONSUMER);
-        context.recomputeFileSystemState(resolvedPath, computeThreadCount());
+        context.recomputeFileSystemState(resolvedPath);
 
         Path contextPropertiesPath = context.writeProperties();
         saveContextAndAppProperties(contextPropertiesPath);
-    }
-
-    /**
-     * @return integer from [0, Runtime.getRuntime().availableProcessors()] according to specified parallelism.
-     */
-    private static int computeThreadCount() {
-        Double parallelism = Optional.ofNullable((String) APP_PROPERTIES.get(PARALLELISM_PROPERTY_NAME)).map(Double::parseDouble).orElse(1.);
-        return (int) Math.round(Math.max(1, Runtime.getRuntime().availableProcessors() * Math.min(1, parallelism)));
     }
 
     private static Optional<Context> getLatestLoadedContext() {
@@ -178,9 +171,9 @@ public class Main {
     private static MessageConsumer newMessageConsumer() {
         Console console = System.console();
         if (console != null) {
-            return new DefaultMessageConsumer(console.writer());
+            return new ConcurrentMessageConsumer(console.writer());
         } else {
-            return new DefaultMessageConsumer();
+            return new ConcurrentMessageConsumer();
         }
     }
 
@@ -189,9 +182,9 @@ public class Main {
         try {
             // first, load embedded fallback properties
             properties.load(Main.class.getClassLoader().getResourceAsStream(COPYSNAP_PROPERTIES_FILENAME));
-            if (Files.isRegularFile(COPYSNAP_DEFAULT_PROPERTIES)) {
+            if (Files.isRegularFile(COPYSNAP_APP_PROPERTIES)) {
                 // then, load user properties
-                try (BufferedReader br = Files.newBufferedReader(COPYSNAP_DEFAULT_PROPERTIES)) {
+                try (BufferedReader br = Files.newBufferedReader(COPYSNAP_APP_PROPERTIES)) {
                     properties.load(br);
                 }
             }
@@ -214,10 +207,10 @@ public class Main {
     }
 
     private static void writeAppProperties() throws IOException {
-        Path parent = COPYSNAP_DEFAULT_PROPERTIES.getParent();
+        Path parent = COPYSNAP_APP_PROPERTIES.getParent();
         if (parent != null)
             Files.createDirectories(parent);
-        try (BufferedWriter bw = Files.newBufferedWriter(COPYSNAP_DEFAULT_PROPERTIES, StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+        try (BufferedWriter bw = Files.newBufferedWriter(COPYSNAP_APP_PROPERTIES, StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
             APP_PROPERTIES.store(bw, COPYSNAP_APP_NAME + " properties");
         }
     }

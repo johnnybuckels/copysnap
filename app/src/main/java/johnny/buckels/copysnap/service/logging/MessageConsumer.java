@@ -1,11 +1,13 @@
 package johnny.buckels.copysnap.service.logging;
 
 
+import java.io.Closeable;
+
 /**
  * Implementing classes are able to consume messages.
  * MessageConsumer instances of this are intended to be a member of a {@link MessageProducer}.
  */
-public interface MessageConsumer {
+public interface MessageConsumer extends Closeable {
 
     void consumeMessage(Message message);
 
@@ -15,6 +17,12 @@ public interface MessageConsumer {
     void consumeMessageOverride(Message message);
 
     void newLine();
+
+    /**
+     * Stops this consumer from accepting new messages.
+     */
+    @Override
+    void close();
 
     static MessageConsumer quiet() {
         return new MessageConsumer() {
@@ -28,6 +36,10 @@ public interface MessageConsumer {
 
             @Override
             public void newLine() {
+            }
+
+            @Override
+            public void close() {
             }
         };
     }

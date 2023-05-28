@@ -13,6 +13,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class FileSystemState {
 
@@ -163,7 +164,7 @@ public class FileSystemState {
     public static class Builder {
 
         private final Path root;
-        private final Set<FileState> states = new HashSet<>();
+        private final ConcurrentLinkedQueue<FileState> states = new ConcurrentLinkedQueue<>();
 
         private Builder(Path root) {
             this.root = root;
@@ -175,7 +176,7 @@ public class FileSystemState {
         }
 
         public FileSystemState build() {
-            return new FileSystemState(root, ZonedDateTime.now(), states);
+            return new FileSystemState(root, ZonedDateTime.now(), new HashSet<>(states));
         }
 
     }

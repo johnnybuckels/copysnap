@@ -14,9 +14,7 @@ public class HashingServiceTest {
     // Accesses actual file system
 //    @Test
     public void testParallelHashing() {
-        int nThreads = Runtime.getRuntime().availableProcessors();
-        System.out.println("Cores: " + nThreads);
-        ParallelHashingService parallelHashingService = new ParallelHashingService(nThreads);
+        ParallelHashingService parallelHashingService = new ParallelHashingService();
 
         long start = System.currentTimeMillis();
         FileSystemState fileSystemState = parallelHashingService.computeState(TEST_PATH);

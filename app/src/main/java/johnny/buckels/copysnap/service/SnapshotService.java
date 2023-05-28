@@ -32,14 +32,13 @@ public class SnapshotService extends AbstractMessageProducer {
      * Creates a snapshot of the source directory and writes files to the specified destination;
      */
     public void createNewSnapshot(Path destination) {
-        messageConsumer.consumeMessage(Message.info("Creating new Snapshot at " + destination));
+        messageConsumer.consumeMessage(Message.info("Creating new snapshot at " + destination));
 
         FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(newState, oldState);
         fileSystemDiffService.setMessageConsumer(messageConsumer);
         FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff();
 
         Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination);
-        messageConsumer.consumeMessage(Message.info("Writing snapshot."));
         int performedCount = 0;
         for (CopyAction copyAction : copyActions) {
             try {
@@ -48,7 +47,7 @@ public class SnapshotService extends AbstractMessageProducer {
             } catch (IOException e) {
                 messageConsumer.consumeMessage(Message.error("Could not perform copy action " + copyAction + ": " + e));
             }
-            messageConsumer.consumeMessageOverride(Message.progressInfo(performedCount, copyActions.size()));
+            messageConsumer.consumeMessageOverride(Message.progressInfo("Writing files", performedCount, copyActions.size()));
         }
         messageConsumer.newLine();
     }

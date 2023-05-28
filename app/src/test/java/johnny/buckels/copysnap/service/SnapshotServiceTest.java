@@ -16,7 +16,7 @@ public class SnapshotServiceTest {
 
 //    @Test
     public void generateSnapshotTest() {
-        ParallelHashingService parallelHashingService = new ParallelHashingService(1);
+        ParallelHashingService parallelHashingService = new ParallelHashingService();
         FileSystemState newState = parallelHashingService.computeState(TEST_PATH);
         FileSystemState oldState = parallelHashingService.computeState(TEST_PATH_SNAPSHOTS.resolve("test1/tmp"));
         new SnapshotService(newState, oldState).createNewSnapshot(TEST_PATH_SNAPSHOTS.resolve("test2"));
@@ -25,7 +25,7 @@ public class SnapshotServiceTest {
 //    @Test
     public void generateSnapshotTest_fromContext() {
         Context context = Contexts.createNew(TEST_PATH, TEST_PATH_SNAPSHOTS);
-        context.createSnapshot(1);
+        context.createSnapshot();
     }
 
 }

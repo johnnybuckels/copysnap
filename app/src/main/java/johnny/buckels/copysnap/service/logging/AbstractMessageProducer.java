@@ -4,7 +4,7 @@ import java.util.Objects;
 
 public class AbstractMessageProducer implements MessageProducer {
 
-    protected MessageConsumer messageConsumer = new DefaultMessageConsumer();
+    protected MessageConsumer messageConsumer = MessageConsumer.quiet();
 
     @Override
     public void setMessageConsumer(MessageConsumer messageConsumer) {

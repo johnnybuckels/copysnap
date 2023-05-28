@@ -5,10 +5,12 @@ public class Message {
     private final String prefix;
     private final String message;
 
-    public static Message progressInfo(int processedCount, int totalCount) {
+    public static Message progressInfo(String subject, int processedCount, int totalCount) {
         int percentage = totalCount < 1 ? 0 : (int) (((double) processedCount / totalCount) * 100);
-        return Message.info("%3s%% [%s] (%s / %s)",
-                percentage, "#".repeat(percentage) + " ".repeat(100 - percentage), processedCount, totalCount);
+        int maxPercentageLength = 100 / 2;
+        int percentageLength = percentage / 2;
+        return Message.info("%-24s %3s%% [%s] (%s / %s)",
+                subject, percentage, "#".repeat(percentageLength) + " ".repeat(maxPercentageLength - percentageLength), processedCount, totalCount);
     }
 
     public static Message info(String message, Object... args) {

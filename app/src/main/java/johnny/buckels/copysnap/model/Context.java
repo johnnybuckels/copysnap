@@ -25,8 +25,8 @@ public class Context extends AbstractMessageProducer {
         this.properties = properties;
     }
 
-    public void createSnapshot(int threadCount) {
-        FileSystemState newState = computeFileSystemState(properties.getSourceDir(), threadCount);
+    public void createSnapshot() {
+        FileSystemState newState = computeFileSystemState(properties.getSourceDir());
         Path newSnapshotDir = properties.getSnapshotsHomeDir().resolve(generateSnapshotName());
 
         SnapshotService snapshotService = new SnapshotService(newState, loadLatestFileSystemState());
@@ -39,10 +39,9 @@ public class Context extends AbstractMessageProducer {
     /**
      * Intended to reproduce a file system state of an older snapshot or to repair a broken file system state.
      * @param sourceDir The directory to compute the new state from.
-     * @param threadCount The amount of threads to use when computing hashes.
      */
-    public void recomputeFileSystemState(Path sourceDir, int threadCount) {
-        FileSystemState fileSystemState = computeFileSystemState(sourceDir, threadCount);
+    public void recomputeFileSystemState(Path sourceDir) {
+        FileSystemState fileSystemState = computeFileSystemState(sourceDir);
         properties = properties.getNewUpdated(fileSystemState.getRootPath());
         writeLatestFileSystemState(fileSystemState);
     }
@@ -72,8 +71,8 @@ public class Context extends AbstractMessageProducer {
         return properties.toDisplayString();
     }
 
-    private FileSystemState computeFileSystemState(Path sourceDir, int threadCount) {
-        ParallelHashingService parallelHashingService = new ParallelHashingService(threadCount);
+    private FileSystemState computeFileSystemState(Path sourceDir) {
+        ParallelHashingService parallelHashingService = new ParallelHashingService();
         parallelHashingService.setMessageConsumer(messageConsumer);
         return parallelHashingService.computeState(sourceDir);
     }
