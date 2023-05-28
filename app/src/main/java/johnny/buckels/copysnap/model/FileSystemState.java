@@ -51,7 +51,7 @@ public class FileSystemState {
         try (BufferedReader br = Files.newBufferedReader(path)) {
             // read first two lines
             builder = FileSystemState.builder(Path.of(readNextEntry(br).orElseThrow()));
-            ZonedDateTime createdTime = ZonedDateTime.parse(readNextEntry(br).orElseThrow(), DATE_TIME_FORMATTER);
+            readNextEntry(br).orElseThrow(); // reading 'created'-line which is currently unused
             // read remaining lines
             Optional<String> nextEntry;
             while ((nextEntry = readNextEntry(br)).isPresent()) {
@@ -113,10 +113,6 @@ public class FileSystemState {
      */
     public Set<FileState> getStates() {
         return Collections.unmodifiableSet(states);
-    }
-
-    public int getFileCount() {
-        return states.size();
     }
 
     /**
