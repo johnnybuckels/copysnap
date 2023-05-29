@@ -26,6 +26,14 @@ public class ConcurrentMessageConsumer implements MessageConsumer {
     }
 
     @Override
+    public void consumeMessage(Message message, Throwable e) {
+        executor.execute(() -> {
+            printWriter.println(message);
+            e.printStackTrace(printWriter);
+        });
+    }
+
+    @Override
     public void consumeMessageOverride(Message message) {
         executor.execute(() -> printWriter.print(CURSOR_TO_START + message));
     }

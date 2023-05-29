@@ -1,5 +1,6 @@
 package johnny.buckels.copysnap;
 
+import io.github.johannesbuchholz.clihats.core.exceptions.execution.CliException;
 import io.github.johannesbuchholz.clihats.processor.annotations.Command;
 import io.github.johannesbuchholz.clihats.processor.annotations.CommandLineInterface;
 import io.github.johannesbuchholz.clihats.processor.annotations.Option;
@@ -38,7 +39,11 @@ public class Main {
 
     public static void main(String[] args) {
         ZonedDateTime start = ZonedDateTime.now();
-        CliHats.get(Main.class).execute(args);
+        try {
+            CliHats.get(Main.class).executeWithThrows(args);
+        } catch (CliException e) {
+            MESSAGE_CONSUMER.consumeMessage(Message.error(e.getMessage()), e);
+        }
         MESSAGE_CONSUMER.consumeMessage(Message.info("Executing CopySnap command took %s ms", Duration.between(start, ZonedDateTime.now()).toMillis()));
         MESSAGE_CONSUMER.close();
     }
@@ -91,7 +96,6 @@ public class Main {
             return;
         }
         Context context = contextOpt.get();
-
         MESSAGE_CONSUMER.consumeMessage(Message.info("Current context"));
         MESSAGE_CONSUMER.consumeMessage(Message.info(context.toDisplayString()));
         MESSAGE_CONSUMER.consumeMessage(Message.info("CopySnap properties: " + COPYSNAP_APP_PROPERTIES));
@@ -118,8 +122,8 @@ public class Main {
     }
 
     /**
-     * Loads only essential parameters from the specified path. Other parameters are reset. This method call should be
-     * followed up by 'recompute' as the latest file system state dropped.
+     * Loads only essential parameters from the properties at the specified path. Other parameters are reset.
+     * This method call should be followed up by 'recompute' as this method removes the latest file system state.
      * This is useful for resolving compatibility issues between versions of context.properties files and CopySnap.
      * @param path The path to the home directory of a context or its properties file.
      */
@@ -138,8 +142,8 @@ public class Main {
     }
 
     /**
-     * Computes the file state of a specified directory and saves it to the current context.
-     * This method intends to repair a broken or lost file state of a previous snapshot.
+     * Computes the file state of a specified directory saves it to the current context.
+     * This method intends to repair a broken or lost file system state of a previous snapshot.
      * @param directory The directory to compute a new file state of.
      * @param quiet If set, no console output will be printed.
      */

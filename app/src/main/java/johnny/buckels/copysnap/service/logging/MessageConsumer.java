@@ -11,6 +11,8 @@ public interface MessageConsumer extends Closeable {
 
     void consumeMessage(Message message);
 
+    void consumeMessage(Message message, Throwable e);
+
     /**
      * The specified message replaces the previously consumed message.
      */
@@ -28,6 +30,10 @@ public interface MessageConsumer extends Closeable {
         return new MessageConsumer() {
             @Override
             public void consumeMessage(Message message) {
+            }
+
+            @Override
+            public void consumeMessage(Message message, Throwable e) {
             }
 
             @Override
