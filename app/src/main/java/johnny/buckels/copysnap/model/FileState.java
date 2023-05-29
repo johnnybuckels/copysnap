@@ -62,7 +62,7 @@ public class FileState {
         StringBuilder sb = new StringBuilder();
         for (byte b : hash)
             sb.append(b).append(BYTE_HASH_SEPARATOR);
-        return sb.substring(0, sb.length() - 1);
+        return sb.substring(0, Math.max(0, sb.length() - 1));
     }
 
     /**
