@@ -24,7 +24,7 @@ public class FileSystemStateTest {
     }
 
     @Test
-    public void test_SerDe() throws IOException {
+    public void serde() throws IOException {
         int fileCount = 100;
 
         // given
