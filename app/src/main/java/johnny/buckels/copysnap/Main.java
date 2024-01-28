@@ -1,10 +1,10 @@
 package johnny.buckels.copysnap;
 
-import io.github.johannesbuchholz.clihats.core.exceptions.execution.CliException;
+import io.github.johannesbuchholz.clihats.core.execution.CliException;
+import io.github.johannesbuchholz.clihats.core.execution.exception.CliHelpCallException;
+import io.github.johannesbuchholz.clihats.processor.annotations.Argument;
 import io.github.johannesbuchholz.clihats.processor.annotations.Command;
 import io.github.johannesbuchholz.clihats.processor.annotations.CommandLineInterface;
-import io.github.johannesbuchholz.clihats.processor.annotations.Option;
-import io.github.johannesbuchholz.clihats.processor.annotations.OptionNecessity;
 import io.github.johannesbuchholz.clihats.processor.execution.CliHats;
 import johnny.buckels.copysnap.model.Context;
 import johnny.buckels.copysnap.model.Contexts;
@@ -20,6 +20,9 @@ import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.Optional;
 import java.util.Properties;
+
+import static io.github.johannesbuchholz.clihats.processor.annotations.Argument.Necessity.REQUIRED;
+import static io.github.johannesbuchholz.clihats.processor.annotations.Argument.Type.OPERAND;
 
 /**
  * Tool to create lightweight incremental snapshots of a file system.
@@ -41,6 +44,8 @@ public class Main {
         ZonedDateTime start = ZonedDateTime.now();
         try {
             CliHats.get(Main.class).executeWithThrows(args);
+        } catch (CliHelpCallException e) {
+            MESSAGE_CONSUMER.consumeMessage(Message.info(e.getMessage()));
         } catch (CliException e) {
             MESSAGE_CONSUMER.consumeMessage(Message.error(e.getMessage()), e);
         }
@@ -54,7 +59,7 @@ public class Main {
      */
     @Command
     public static void init(
-            @Option(necessity = OptionNecessity.REQUIRED, position = 0) Path source
+            @Argument(necessity = REQUIRED, type = OPERAND) Path source
     ) {
         Path cwd = Path.of(System.getProperty("user.dir"));
         Path sourceDirResolved = resolvePathToCwd(source);
@@ -73,7 +78,7 @@ public class Main {
      */
     @Command(name = "load")
     public static void load(
-            @Option(necessity = OptionNecessity.REQUIRED, position = 0) Path path
+            @Argument(necessity = REQUIRED, type = OPERAND) Path path
     ) {
         Path searchPathResolved = resolvePathToCwd(path);
         Context context = Contexts.load(searchPathResolved);
@@ -107,7 +112,7 @@ public class Main {
      */
     @Command
     public static void snapshot(
-            @Option(flagValue = "true", defaultValue = "false") Boolean quiet
+            @Argument(flagValue = "true", defaultValue = "false") Boolean quiet
     ) {
         Optional<Context> contextOpt = getLatestLoadedContext();
         if (contextOpt.isEmpty()) {
@@ -129,7 +134,7 @@ public class Main {
      */
     @Command
     public static void repair(
-            @Option(necessity = OptionNecessity.REQUIRED, position = 0) Path path
+            @Argument(necessity = REQUIRED, type = OPERAND) Path path
     ) {
         Path resolvePath = resolvePathToCwd(path);
         Context context = Contexts.repairAndLoad(resolvePath);
@@ -149,8 +154,8 @@ public class Main {
      */
     @Command
     public static void recompute(
-            @Option(necessity = OptionNecessity.REQUIRED, position = 0) Path directory,
-            @Option(flagValue = "true", defaultValue = "false") Boolean quiet
+            @Argument(necessity = REQUIRED, type = OPERAND) Path directory,
+            @Argument(flagValue = "true", defaultValue = "false") Boolean quiet
     ) {
         Path resolvedPath = resolvePathToCwd(directory);
         Optional<Context> contextOpt = getLatestLoadedContext();
