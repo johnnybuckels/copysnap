@@ -3,14 +3,15 @@ package johnny.buckels.copysnap.testutils;
 import johnny.buckels.copysnap.model.FileState;
 
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.Random;
+import java.util.UUID;
 
 public class FileStateGenerator {
 
     private static final int HASH_SIZE = 16;
     private static final int MAX_PATH_LENGTH = 8;
     private final Random rng;
-
 
     public FileStateGenerator() {
         rng = new Random();
@@ -32,7 +33,7 @@ public class FileStateGenerator {
         rng.nextBytes(bytes);
         // 97 = 'a', 122 = 'z'
         Path p = root.resolve(getRandomRelativePath(randomPartLength));
-        return new FileState(p, bytes);
+        return new FileState(p, Instant.now(), UUID.nameUUIDFromBytes(bytes).toString());
     }
 
     /**

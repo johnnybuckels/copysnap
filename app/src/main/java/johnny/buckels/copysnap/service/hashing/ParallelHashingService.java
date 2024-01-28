@@ -10,8 +10,9 @@ import johnny.buckels.copysnap.util.HashUtils;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.util.Objects;
-import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
@@ -39,14 +40,17 @@ public class ParallelHashingService extends AbstractMessageProducer {
                     .filter(Files::isRegularFile)
                     .parallel()
                     .forEach(path -> {
-                        // TODO: Consider first collecting paths and bucket paths in "accessible" etc.
                         messageConsumer.consumeMessageOverride(Message.progressInfo(MESSAGE_SUBJECT, completedCount.get(), submittedCount.incrementAndGet()));
-                        Optional<byte[]> hash = computeFileHash(path);
-                        if (hash.isEmpty()) {
+                        try {
+                            String hash = UUID.nameUUIDFromBytes(HashUtils.computeFileHash(path)).toString();
+                            FileTime lastModifiedTime = Files.getLastModifiedTime(path);
+                            FileState fileState = new FileState(path, lastModifiedTime.toInstant(), hash);
+                            fstBuilder.add(fileState.relativize(rootPath));
+                        } catch (IOException e) {
+                            messageConsumer.newLine();
+                            messageConsumer.consumeMessage(Message.error("Skipping file at %s during hash computation: %s", path, e));
                             return;
                         }
-                        FileState fileState = new FileState(path, hash.get());
-                        fstBuilder.add(fileState.relativize(rootPath));
                         messageConsumer.consumeMessageOverride(Message.progressInfo(MESSAGE_SUBJECT, completedCount.incrementAndGet(), submittedCount.get()));
                     });
         } catch (IOException e) {
@@ -55,17 +59,6 @@ public class ParallelHashingService extends AbstractMessageProducer {
         FileSystemState fileSystemState = fstBuilder.build();
         messageConsumer.newLine();
         return fileSystemState;
-    }
-
-    private Optional<byte[]> computeFileHash(Path path) {
-        try {
-            return Optional.of(HashUtils.computeFileHash(path));
-        } catch (IOException e) {
-            messageConsumer.newLine();
-            messageConsumer.consumeMessage(Message.error("Skipping file at %s during hash computation: %s", path, e));
-        }
-        // we do not want to stop processing and ignore this file
-        return Optional.empty();
     }
 
 }

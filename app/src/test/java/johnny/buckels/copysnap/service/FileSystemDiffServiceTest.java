@@ -10,6 +10,7 @@ import johnny.buckels.copysnap.service.diffing.copy.SymbolicLinkCopyAction;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -26,15 +27,16 @@ public class FileSystemDiffServiceTest {
         Path destination = Path.of("/p/q/rnew");
 
         // and given: new (current) file state
-        byte[] hashNew = {0};
-        FileState stateNew = new FileState(file, hashNew);
+        String hashNew = "newHash";
+        Instant time = Instant.now();
+        FileState stateNew = new FileState(file, time, hashNew);
         FileSystemState.Builder builderNew = FileSystemState.builder(rootNew);
         builderNew.add(stateNew);
         FileSystemState fssNew = builderNew.build();
 
         // and given: old file state
-        byte[] hashOld = {1};
-        FileState stateOld = new FileState(file, hashOld);
+        String hashOld = "oldHash";
+        FileState stateOld = new FileState(file, time, hashOld);
         FileSystemState.Builder builderOld = FileSystemState.builder(rootOld);
         builderOld.add(stateOld);
         FileSystemState fssOld = builderOld.build();
@@ -49,7 +51,7 @@ public class FileSystemDiffServiceTest {
         Path expectedCopySource = rootNew.resolve(file);
         CopyAction expectedAction = new PlainCopyAction(expectedCopySource, expectedCopyLocation);
         assertEquals(1, copyActions.size());
-        assertEquals(expectedAction, copyActions.get(0));
+        assertEquals(expectedAction, copyActions.getFirst());
     }
 
     @Test
@@ -61,15 +63,16 @@ public class FileSystemDiffServiceTest {
         Path destination = Path.of("/p/q/rnew");
 
         // and given: new (current) file state
-        byte[] hashNew = {0};
-        FileState stateNew = new FileState(fileNew, hashNew);
+        String hashNew = "{0}";
+        Instant time = Instant.now();
+        FileState stateNew = new FileState(fileNew, time, hashNew);
         FileSystemState.Builder builderNew = FileSystemState.builder(rootNew);
         builderNew.add(stateNew);
         FileSystemState fssNew = builderNew.build();
 
         // and given: old file state
-        byte[] hashOld = {0};
-        FileState stateOld = new FileState(fileOld, hashOld);
+        String hashOld = "{0}";
+        FileState stateOld = new FileState(fileOld, time, hashOld);
         FileSystemState.Builder builderOld = FileSystemState.builder(rootOld);
         builderOld.add(stateOld);
         FileSystemState fssOld = builderOld.build();
@@ -97,20 +100,21 @@ public class FileSystemDiffServiceTest {
         Path destination = Path.of("/p/q/rnew");
 
         // and given: new (current) file state
-        byte[] hashNewChanged = {0};
-        byte[] hashNewUnchanged = {9};
-        FileState stateNewChanged = new FileState(fileChanged, hashNewChanged);
-        FileState stateNewUnchanged = new FileState(fileUnchanged, hashNewUnchanged);
+        Instant time = Instant.now();
+        String hashNewChanged = "0";
+        String hashNewUnchanged = "9";
+        FileState stateNewChanged = new FileState(fileChanged, time, hashNewChanged);
+        FileState stateNewUnchanged = new FileState(fileUnchanged, time, hashNewUnchanged);
         FileSystemState.Builder builderNew = FileSystemState.builder(rootNew);
         builderNew.add(stateNewChanged);
         builderNew.add(stateNewUnchanged);
         FileSystemState fssNew = builderNew.build();
 
         // and given: old file state
-        byte[] hashOldChanged = {1};
-        byte[] hashOldUnchanged = {9};
-        FileState stateOldChanged = new FileState(fileChanged, hashOldChanged);
-        FileState stateOldUnchanged = new FileState(fileUnchanged, hashOldUnchanged);
+        String hashOldChanged = "1";
+        String hashOldUnchanged = "9";
+        FileState stateOldChanged = new FileState(fileChanged, time, hashOldChanged);
+        FileState stateOldUnchanged = new FileState(fileUnchanged, time, hashOldUnchanged);
         FileSystemState.Builder builderOld = FileSystemState.builder(rootOld);
         builderOld.add(stateOldChanged);
         builderOld.add(stateOldUnchanged);
@@ -162,14 +166,15 @@ public class FileSystemDiffServiceTest {
 
 
         // and given: new (current) file state
-        FileState hashFileChangedCurrent = new FileState(fileChanged, new byte[] {9});
+        Instant time = Instant.now();
+        FileState hashFileChangedCurrent = new FileState(fileChanged, time, "new byte[] {9}");
         FileSystemState.Builder builderNew = FileSystemState.builder(rootNew);
         builderNew.add(hashFileChangedCurrent);
         FileSystemState fssNew = builderNew.build();
 
         // and given: old file state
-        FileState hashFileOld = new FileState(fileOld, new byte[] {0});
-        FileState hashFileChanged = new FileState(fileChanged, new byte[] {0});
+        FileState hashFileOld = new FileState(fileOld, time, "new byte[] {0}");
+        FileState hashFileChanged = new FileState(fileChanged, time, "new byte[] {0}");
         FileSystemState.Builder builderOld = FileSystemState.builder(rootOld);
         builderOld.add(hashFileOld);
         builderOld.add(hashFileChanged);
@@ -209,15 +214,16 @@ public class FileSystemDiffServiceTest {
      */
     @Test
     public void test_copyAction_deleteOne_RemainingUnChanged_expectAliasCopyOnFiles() {
+        Instant time = Instant.now();
         Path unchangedFile = Path.of("tmp/d/file.txt");
         FileSystemState current = FileSystemState.builder(Path.of("/x/y/z"))
-                .add(new FileState(unchangedFile, new byte[] {1}))
+                .add(new FileState(unchangedFile, time, "new byte[] {1}"))
                 .build();
 
         Path rootOld = Path.of("/p/q/rold");
         FileSystemState old = FileSystemState.builder(rootOld)
-                .add(new FileState(unchangedFile, new byte[] {1}))
-                .add(new FileState(Path.of("tmp/d/d2/fileOld.txt"), new byte[] {1}))
+                .add(new FileState(unchangedFile, time, "new byte[] {1}"))
+                .add(new FileState(Path.of("tmp/d/d2/fileOld.txt"), time, "new byte[] {1}"))
                 .build();
 
         // when

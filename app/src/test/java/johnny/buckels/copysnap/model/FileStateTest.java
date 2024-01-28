@@ -4,6 +4,7 @@ import johnny.buckels.copysnap.testutils.FileStateGenerator;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
+import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -28,7 +29,7 @@ public class FileStateTest {
     @Test
     public void serde_withEmptyHash() {
         // byte is int from -128 to 127 = 255 positions
-        FileState fs = new FileState(Path.of("a/b/c"), new byte[]{});
+        FileState fs = new FileState(Path.of("a/b/c"), Instant.now(), "test");
         System.out.println("Input: " + fs);
 
         String s = fs.toStringRepresentation();
