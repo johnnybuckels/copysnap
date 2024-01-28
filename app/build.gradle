@@ -4,12 +4,12 @@ plugins {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(11)
+        languageVersion = JavaLanguageVersion.of(21)
     }
 }
 
 group 'johnny.buckels'
-version '0.0.3'
+version '0.0.4'
 
 repositories {
     maven {
