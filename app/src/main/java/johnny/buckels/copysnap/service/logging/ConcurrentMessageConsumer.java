@@ -22,7 +22,10 @@ public class ConcurrentMessageConsumer implements MessageConsumer {
 
     @Override
     public void consumeMessage(Message message) {
-        executor.execute(() -> printWriter.println(message));
+        executor.execute(() -> {
+            printWriter.println(message);
+            printWriter.flush();
+        });
     }
 
     @Override
