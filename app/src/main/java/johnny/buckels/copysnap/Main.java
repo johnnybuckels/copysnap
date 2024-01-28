@@ -66,7 +66,7 @@ public class Main {
         Context context = Contexts.createNew(sourceDirResolved, cwd);
 
         Path contextPropertiesPath = context.writeProperties();
-        saveContextAndAppProperties(contextPropertiesPath);
+        updateCurrentContextInAppProperties(contextPropertiesPath);
 
         MESSAGE_CONSUMER.consumeMessage(Message.info("Initialised context"));
         MESSAGE_CONSUMER.consumeMessage(Message.info(context.toDisplayString()));
@@ -84,7 +84,7 @@ public class Main {
         Context context = Contexts.load(searchPathResolved);
 
         Path contextPropertiesPath = context.writeProperties();
-        saveContextAndAppProperties(contextPropertiesPath);
+        updateCurrentContextInAppProperties(contextPropertiesPath);
 
         MESSAGE_CONSUMER.consumeMessage(Message.info("Loaded context"));
         MESSAGE_CONSUMER.consumeMessage(Message.info(context.toDisplayString()));
@@ -119,11 +119,12 @@ public class Main {
             MESSAGE_CONSUMER.consumeMessage(Message.info("No context loaded."));
             return;
         }
-        Context context = contextOpt.get().withMessageConsumer(quiet ? MessageConsumer.quiet() : MESSAGE_CONSUMER);
+        Context context = contextOpt.get()
+                .withMessageConsumer(quiet ? MessageConsumer.quiet() : MESSAGE_CONSUMER);
         context.createSnapshot();
 
-        Path contextPropertiesPath = context.writeProperties();
-        saveContextAndAppProperties(contextPropertiesPath);
+        Path latestContextPath = context.writeProperties();
+        updateCurrentContextInAppProperties(latestContextPath);
     }
 
     /**
@@ -139,8 +140,8 @@ public class Main {
         Path resolvePath = resolvePathToCwd(path);
         Context context = Contexts.repairAndLoad(resolvePath);
 
-        Path contextPropertiesPath = context.writeProperties();
-        saveContextAndAppProperties(contextPropertiesPath);
+        Path latestContextPath = context.writeProperties();
+        updateCurrentContextInAppProperties(latestContextPath);
 
         MESSAGE_CONSUMER.consumeMessage(Message.info("Repaired context."));
         MESSAGE_CONSUMER.consumeMessage(Message.info(context.toDisplayString()));
@@ -167,7 +168,7 @@ public class Main {
         context.recomputeFileSystemState(resolvedPath);
 
         Path contextPropertiesPath = context.writeProperties();
-        saveContextAndAppProperties(contextPropertiesPath);
+        updateCurrentContextInAppProperties(contextPropertiesPath);
     }
 
     private static Optional<Context> getLatestLoadedContext() {
@@ -203,10 +204,7 @@ public class Main {
         return properties;
     }
 
-    /**
-     * Saves context properties to its home directory as well as in the user's copysnap properties file.
-     */
-    private static void saveContextAndAppProperties(Path latestContextPath) {
+    private static void updateCurrentContextInAppProperties(Path latestContextPath) {
         APP_PROPERTIES.put(CURRENT_CONTEXT_PROPERTY_NAME, latestContextPath.toString());
         try {
             writeAppProperties();

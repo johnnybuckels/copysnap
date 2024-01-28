@@ -17,9 +17,6 @@ public class SnapshotService extends AbstractMessageProducer {
     private final FileSystemState newState;
 
     /**
-     * If '/a/b/c/r' is the path to the file system 'r' to take a snapshot from, then sourceRoot is the path "/a/b/c"
-     * and sourceFileSystemName is the String "r".
-     *
      * @param newState the current state of the file system to take a snapshot from.
      * @param oldState the old state to compare to.
      */

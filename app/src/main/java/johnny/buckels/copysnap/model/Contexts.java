@@ -14,7 +14,6 @@ public class Contexts {
 
     private static final String COPYSNAP_HOME_DIR_POSTFIX = "copysnap";
 
-
     private Contexts() {
         // do not instantiate
     }
@@ -47,7 +46,7 @@ public class Contexts {
     }
 
     /**
-     * Tries to load a context deduced from properties at the specified path. The path must points to the properties
+     * Tries to load a context deduced from properties at the specified path. The path must point to the properties
      * file or to a directory directly containing the properties file at depth 1.
      * This method only loads the source path and the snapshot home directory. Other properties are reset.
      */

@@ -71,6 +71,7 @@ public class Context extends AbstractMessageProducer {
         return properties.toDisplayString();
     }
 
+    // TODO: Remove and replace with mechanism only hashing files that are about to be copied.
     private FileSystemState computeFileSystemState(Path sourceDir) {
         ParallelHashingService parallelHashingService = new ParallelHashingService();
         parallelHashingService.setMessageConsumer(messageConsumer);
