@@ -8,6 +8,19 @@ import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.Set;
 
+/**
+ *                      FileSystem                        CopySnapCopies
+ *                       ...                              ...
+ * newSystemRoot ---->      |- Root                          |- 2024-02-23
+ *                              |-...                            |- Root       <---- oldSystemRoot
+ *                              |-...                                |-...
+ *                                                                   |-...
+ *                                                           |- 2024-04-04     <---- destination
+ *                                                               |- (about to copy here...)
+ * newSystemRoot: The directory where the root path of the current filesystem is located in.
+ * oldSystemRoot: The directory where the root path of the last filesystem-snapshot is located in.
+ * destination: The directory where the copy of the filesystem should reside in.
+ */
 public class FileSystemDiff {
 
     /**
@@ -19,11 +32,13 @@ public class FileSystemDiff {
      */
     private final Path oldSystemRoot;
     private final FileSystemNode diffTree;
+    private final DiffCounts counts;
 
-    public FileSystemDiff(Path newSystemRoot, Path oldSystemRoot, FileSystemNode diffTree) {
+    FileSystemDiff(Path newSystemRoot, Path oldSystemRoot, FileSystemNode diffTree, DiffCounts counts) {
         this.newSystemRoot = newSystemRoot;
         this.oldSystemRoot = oldSystemRoot;
         this.diffTree = diffTree;
+        this.counts = counts;
     }
 
     /**
@@ -33,13 +48,19 @@ public class FileSystemDiff {
         Set<CopyAction> copyActions = new HashSet<>();
         for (FileSystemNode file : diffTree.getLeafs()) {
             if (file.isChanged()) {
-                copyActions.add(new PlainCopyAction(newSystemRoot.resolve(file.getValue()), destination.resolve(file.getValue())));
+                copyActions.add(new PlainCopyAction(newSystemRoot, destination, file.getPath()));
             } else {
-                Path upperMostUnchanged = file.getUppermostUnchanged().getValue();
-                copyActions.add(new SymbolicLinkCopyAction(oldSystemRoot.resolve(upperMostUnchanged), destination.resolve(upperMostUnchanged)));
+                Path upperMostUnchanged = file.getUppermostUnchanged().getPath();
+                copyActions.add(new SymbolicLinkCopyAction(oldSystemRoot, destination, upperMostUnchanged));
             }
         }
         return copyActions;
     }
+
+    public DiffCounts getCounts() {
+        return counts;
+    }
+
+    public record DiffCounts(int newCount, int removedCount, int changedCount, int unchangedCount, int errorCount) {}
 
 }

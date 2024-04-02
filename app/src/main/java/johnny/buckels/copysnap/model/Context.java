@@ -1,7 +1,6 @@
 package johnny.buckels.copysnap.model;
 
 import johnny.buckels.copysnap.service.SnapshotService;
-import johnny.buckels.copysnap.service.hashing.ParallelHashingService;
 import johnny.buckels.copysnap.service.logging.AbstractMessageProducer;
 import johnny.buckels.copysnap.service.logging.Message;
 import johnny.buckels.copysnap.service.logging.MessageConsumer;
@@ -12,7 +11,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Objects;
+import java.util.stream.Stream;
 
 public class Context extends AbstractMessageProducer {
 
@@ -26,13 +27,13 @@ public class Context extends AbstractMessageProducer {
     }
 
     public void createSnapshot() {
-        FileSystemState newState = computeFileSystemState(properties.getSourceDir());
+        List<Path> newPaths = gatherRelativePaths(properties.getSourceDir());
         Path newSnapshotDir = properties.getSnapshotsHomeDir().resolve(generateSnapshotName());
 
-        SnapshotService snapshotService = new SnapshotService(newState, loadLatestFileSystemState());
+        SnapshotService snapshotService = new SnapshotService(properties.getSourceDir(), newPaths, loadLatestFileSystemState());
         snapshotService.setMessageConsumer(messageConsumer);
-        snapshotService.createNewSnapshot(newSnapshotDir);
-        writeLatestFileSystemState(newState.switchRootTo(newSnapshotDir));
+        FileSystemState newState = snapshotService.createNewSnapshot(newSnapshotDir);
+        writeLatestFileSystemState(newState.withRoot(newSnapshotDir));
         properties = properties.getNewUpdated(newSnapshotDir);
     }
 
@@ -73,9 +74,29 @@ public class Context extends AbstractMessageProducer {
 
     // TODO: Remove and replace with mechanism only hashing files that are about to be copied.
     private FileSystemState computeFileSystemState(Path sourceDir) {
-        ParallelHashingService parallelHashingService = new ParallelHashingService();
-        parallelHashingService.setMessageConsumer(messageConsumer);
-        return parallelHashingService.computeState(sourceDir);
+        throw new IllegalStateException("IMPLEMENT WITH NEW LOGiC OR REMOVE");
+//        ParallelHashingService parallelHashingService = new ParallelHashingService();
+//        parallelHashingService.setMessageConsumer(messageConsumer);
+//        return parallelHashingService.computeState(sourceDir);
+    }
+
+    private List<Path> gatherRelativePaths(Path targetDirectory) {
+        /*
+        In order to store file hashes with relative paths, we determine the directory where the file system to create
+        hashes from is located in.
+        Example: targetDirectory: /x/y/z/r
+        Actual file hashes: /x/y/z/r/a/b/f1, /x/y/z/r/a/p/q/f2, /x/y/z/r/f3
+        Relative file hashes: r/a/b/f1, r/a/p/q/f2, r/f3
+         */
+        Path rootPath = Objects.requireNonNullElse(targetDirectory.getParent(), targetDirectory);
+        try (Stream<Path> files = Files.walk(targetDirectory)) {
+            return files
+                    .filter(Files::isRegularFile)
+                    .map(rootPath::relativize)
+                    .toList();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not iterate over directory contents during hashing at " + rootPath + ": " + e.getMessage(), e);
+        }
     }
 
     private String generateSnapshotName() {
@@ -96,7 +117,7 @@ public class Context extends AbstractMessageProducer {
     }
 
     private void writeLatestFileSystemState(FileSystemState fileSystemState) {
-        fileSystemState.writeTo(properties.getSnapshotsHomeDir().resolve(LATEST_FILE_STATE_FILE_NAME));
+        fileSystemState.write(properties.getSnapshotsHomeDir().resolve(LATEST_FILE_STATE_FILE_NAME));
     }
 
 }

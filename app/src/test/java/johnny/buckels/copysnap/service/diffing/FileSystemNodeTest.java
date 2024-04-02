@@ -20,7 +20,7 @@ public class FileSystemNodeTest {
         FileSystemNode aNode = root.append(ra);
 
         // then
-        assertEquals(ra, aNode.getValue());
+        assertEquals(ra, aNode.getPath());
     }
 
     /**
@@ -41,9 +41,9 @@ public class FileSystemNodeTest {
         // then
         FileSystemNode bNode = cNode.getParent();
         FileSystemNode aNode = bNode.getParent();
-        assertEquals(rabc, cNode.getValue());
-        assertEquals(Path.of("r", "a", "b"), bNode.getValue());
-        assertEquals(Path.of("r", "a"), aNode.getValue());
+        assertEquals(rabc, cNode.getPath());
+        assertEquals(Path.of("r", "a", "b"), bNode.getPath());
+        assertEquals(Path.of("r", "a"), aNode.getPath());
     }
 
     @Test
@@ -68,8 +68,8 @@ public class FileSystemNodeTest {
         Set<FileSystemNode> childrenR = rNode.getChildren();
         assertEquals(Set.of(rNode), childrenRoot);
         assertEquals(Set.of(aNode, bNode, cNode), childrenR);
-        assertEquals(c, cNode.getValue());
-        assertEquals(ca, caNode.getValue());
+        assertEquals(c, cNode.getPath());
+        assertEquals(ca, caNode.getPath());
     }
 
     /**
@@ -103,9 +103,9 @@ public class FileSystemNodeTest {
         FileSystemNode r3cNodeInsert = r3cNode.insert(rabcdf);
 
         // then
-        assertEquals(rabcdf, r1Insert.getValue());
-        assertEquals(rabcdf, r2aNodeInnsert.getValue());
-        assertEquals(rabcdf, r3cNodeInsert.getValue());
+        assertEquals(rabcdf, r1Insert.getPath());
+        assertEquals(rabcdf, r2aNodeInnsert.getPath());
+        assertEquals(rabcdf, r3cNodeInsert.getPath());
     }
 
     @Test
@@ -120,7 +120,7 @@ public class FileSystemNodeTest {
         FileSystemNode cNode = root.insert(c);
 
         // then
-        assertEquals(c, cNode.getValue());
+        assertEquals(c, cNode.getPath());
         assertEquals(Set.of(fNode), root.getLeafs());
     }
 
@@ -152,9 +152,9 @@ public class FileSystemNodeTest {
         // then
         FileSystemNode yNode = zNode.getParent();
         FileSystemNode xNode = yNode.getParent();
-        assertEquals(rcxyz, zNode.getValue());
-        assertEquals(Path.of("r", "c", "x", "y"), yNode.getValue());
-        assertEquals(Path.of("r", "c", "x"), xNode.getValue());
+        assertEquals(rcxyz, zNode.getPath());
+        assertEquals(Path.of("r", "c", "x", "y"), yNode.getPath());
+        assertEquals(Path.of("r", "c", "x"), xNode.getPath());
         assertEquals(cNode, xNode.getParent());
         assertEquals(Set.of(dNode, xNode), cNode.getChildren());
     }
@@ -179,12 +179,12 @@ public class FileSystemNodeTest {
         FileSystemNode r = root.insert(rP);
 
         // then
-        assertEquals(rafP, raf.getValue());
-        assertEquals(rbfP, rbf.getValue());
-        assertEquals(raaafP, raaaf.getValue());
-        assertEquals(rccafP, rccaf.getValue());
-        assertEquals(rccbfP, rccbf.getValue());
-        assertEquals(rP, r.getValue());
+        assertEquals(rafP, raf.getPath());
+        assertEquals(rbfP, rbf.getPath());
+        assertEquals(raaafP, raaaf.getPath());
+        assertEquals(rccafP, rccaf.getPath());
+        assertEquals(rccbfP, rccbf.getPath());
+        assertEquals(rP, r.getPath());
         assertEquals(Set.of(r), root.getChildren());
         assertEquals(3, r.getChildren().size()); // should be r/a, r/b, r/c
     }
@@ -229,12 +229,12 @@ public class FileSystemNodeTest {
         FileSystemNode caNode = cNode.append(ca);
 
         // when
-        FileSystemNode deepestKnownCa = root.getDeepestKnownAlong(caNode.getValue());
-        FileSystemNode deepestKnownC = root.getDeepestKnownAlong(cNode.getValue());
-        FileSystemNode deepestKnownR = root.getDeepestKnownAlong(rNode.getValue());
+        FileSystemNode deepestKnownCa = root.getDeepestKnownAlong(caNode.getPath());
+        FileSystemNode deepestKnownC = root.getDeepestKnownAlong(cNode.getPath());
+        FileSystemNode deepestKnownR = root.getDeepestKnownAlong(rNode.getPath());
         FileSystemNode deepestKnownEmpty = root.getDeepestKnownAlong(Path.of(""));
         FileSystemNode unknown = root.getDeepestKnownAlong(Path.of("some/unknown/path"));
-        FileSystemNode unknownAfterA = root.getDeepestKnownAlong(aNode.getValue().resolve("some/deeper/path"));
+        FileSystemNode unknownAfterA = root.getDeepestKnownAlong(aNode.getPath().resolve("some/deeper/path"));
 
         // then
         assertEquals(caNode, deepestKnownCa);

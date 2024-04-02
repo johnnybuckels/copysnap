@@ -1,4 +1,4 @@
-package johnny.buckels.copysnap.service.exception;
+package johnny.buckels.copysnap.model;
 
 public class IllegalPropertiesException extends Exception {
 

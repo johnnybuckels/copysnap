@@ -1,7 +1,9 @@
 package johnny.buckels.copysnap.service;
 
+import johnny.buckels.copysnap.model.CheckpointChecksum;
 import johnny.buckels.copysnap.model.FileState;
 import johnny.buckels.copysnap.model.FileSystemState;
+import johnny.buckels.copysnap.service.diffing.FileSystemAccessor;
 import johnny.buckels.copysnap.service.diffing.FileSystemDiff;
 import johnny.buckels.copysnap.service.diffing.FileSystemDiffService;
 import johnny.buckels.copysnap.service.diffing.copy.CopyAction;
@@ -9,15 +11,35 @@ import johnny.buckels.copysnap.service.diffing.copy.PlainCopyAction;
 import johnny.buckels.copysnap.service.diffing.copy.SymbolicLinkCopyAction;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+
 public class FileSystemDiffServiceTest {
+
+    private record TestFileSystemAccessor(
+            Map<Path, Instant> lastModified,
+            Map<Path, CheckpointChecksum> checksums
+    ) implements FileSystemAccessor {
+
+        @Override
+            public Instant getLastModifiedTime(Path p) {
+                return Optional.ofNullable(lastModified.get(p)).orElseThrow();
+            }
+
+            @Override
+            public boolean areChecksumsEqual(CheckpointChecksum expectedChecksum, Path p) {
+                return Optional.ofNullable(checksums.get(p)).map(expectedChecksum::equals).orElseThrow();
+            }
+
+        }
 
     @Test
     public void test_copyActions_plainCopy() {
@@ -25,69 +47,78 @@ public class FileSystemDiffServiceTest {
         Path file = Path.of("r/a/b/c/f");
         Path rootOld = Path.of("/p/q/rold");
         Path destination = Path.of("/p/q/rnew");
+        Instant time = Instant.now();
 
         // and given: new (current) file state
-        String hashNew = "newHash";
-        Instant time = Instant.now();
-        FileState stateNew = new FileState(file, time, hashNew);
-        FileSystemState.Builder builderNew = FileSystemState.builder(rootNew);
-        builderNew.add(stateNew);
-        FileSystemState fssNew = builderNew.build();
+        CheckpointChecksum hashNew = checksum("newHash");
 
         // and given: old file state
-        String hashOld = "oldHash";
+        CheckpointChecksum hashOld = checksum("oldHash");
         FileState stateOld = new FileState(file, time, hashOld);
         FileSystemState.Builder builderOld = FileSystemState.builder(rootOld);
         builderOld.add(stateOld);
         FileSystemState fssOld = builderOld.build();
 
         // when
-        FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fssNew, fssOld);
-        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff();
-        List<CopyAction> copyActions = new ArrayList<>(fileSystemDiff.computeCopyActions(destination));
+        TestFileSystemAccessor fsa = new TestFileSystemAccessor(
+                Map.of(rootNew.resolve(file), time.plusSeconds(1)),
+                Map.of(rootNew.resolve(file), hashNew)
+        );
+
+        FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
+        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(rootNew, List.of(file), fssOld);
+        Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination);
 
         // then
-        Path expectedCopyLocation = Path.of("/p/q/rnew/r/a/b/c/f");
-        Path expectedCopySource = rootNew.resolve(file);
-        CopyAction expectedAction = new PlainCopyAction(expectedCopySource, expectedCopyLocation);
-        assertEquals(1, copyActions.size());
-        assertEquals(expectedAction, copyActions.getFirst());
+        /*
+            expectedCopyLocation: /p/q/rnew/r/a/b/c/f
+            expectedCopySource: rootNew.resolve(file)
+         */
+        CopyAction expectedAction = new PlainCopyAction(rootNew, destination, file);
+        assertEquals(Set.of(expectedAction), copyActions);
+        assertEquals(new FileSystemDiff.DiffCounts(0, 0, 1, 0, 0), fileSystemDiff.getCounts());
+
     }
+
 
     @Test
     public void test_copyActions_aliasCopy() {
         Path rootNew = Path.of("/x/y/z");
-        Path fileNew = Path.of("r/a/b/c/f");
+        Path file = Path.of("r/a/b/c/f");
         Path rootOld = Path.of("/p/q/rold");
-        Path fileOld = Path.of("r/a/b/c/f");
         Path destination = Path.of("/p/q/rnew");
+        Instant time = Instant.now();
 
         // and given: new (current) file state
-        String hashNew = "{0}";
-        Instant time = Instant.now();
-        FileState stateNew = new FileState(fileNew, time, hashNew);
-        FileSystemState.Builder builderNew = FileSystemState.builder(rootNew);
-        builderNew.add(stateNew);
-        FileSystemState fssNew = builderNew.build();
+        CheckpointChecksum hashNew = checksum("{0}");
 
         // and given: old file state
-        String hashOld = "{0}";
-        FileState stateOld = new FileState(fileOld, time, hashOld);
+        CheckpointChecksum hashOld = checksum("{0}");
+        FileState stateOld = new FileState(file, time, hashOld);
         FileSystemState.Builder builderOld = FileSystemState.builder(rootOld);
         builderOld.add(stateOld);
         FileSystemState fssOld = builderOld.build();
 
         // when
-        FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fssNew, fssOld);
-        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff();
+        TestFileSystemAccessor fsa = new TestFileSystemAccessor(
+                Map.of(rootNew.resolve(file), time.plusSeconds(1)),
+                Map.of(rootNew.resolve(file), hashNew)
+        );
+        FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
+        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(rootNew, List.of(file), fssOld);
         Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination);
 
         // then
-        Path expectedPath = Path.of("/p/q/rnew/r");
-        CopyAction expectedAction = new SymbolicLinkCopyAction(Path.of("/p/q/rold/r"), expectedPath);
-
+        /*
+            expectedPath: "/p/q/rnew/r"
+            No file changed so the uppermost unchanged will be copied with a symbolic link, which is r
+         */
+        CopyAction expectedAction = new SymbolicLinkCopyAction(rootOld, destination, Path.of("r"));
         assertEquals(Set.of(expectedAction), copyActions);
+        assertEquals(new FileSystemDiff.DiffCounts(0, 0, 0, 1, 0), fileSystemDiff.getCounts());
+
     }
+
 
     @Test
     public void test_copyActions_aliasAndCopy() {
@@ -101,18 +132,12 @@ public class FileSystemDiffServiceTest {
 
         // and given: new (current) file state
         Instant time = Instant.now();
-        String hashNewChanged = "0";
-        String hashNewUnchanged = "9";
-        FileState stateNewChanged = new FileState(fileChanged, time, hashNewChanged);
-        FileState stateNewUnchanged = new FileState(fileUnchanged, time, hashNewUnchanged);
-        FileSystemState.Builder builderNew = FileSystemState.builder(rootNew);
-        builderNew.add(stateNewChanged);
-        builderNew.add(stateNewUnchanged);
-        FileSystemState fssNew = builderNew.build();
+        CheckpointChecksum hashNewChanged = checksum("0");
+        CheckpointChecksum hashNewUnchanged = checksum("9");
 
         // and given: old file state
-        String hashOldChanged = "1";
-        String hashOldUnchanged = "9";
+        CheckpointChecksum hashOldChanged = checksum("1");
+        CheckpointChecksum hashOldUnchanged = checksum("9");
         FileState stateOldChanged = new FileState(fileChanged, time, hashOldChanged);
         FileState stateOldUnchanged = new FileState(fileUnchanged, time, hashOldUnchanged);
         FileSystemState.Builder builderOld = FileSystemState.builder(rootOld);
@@ -121,20 +146,35 @@ public class FileSystemDiffServiceTest {
         FileSystemState fssOld = builderOld.build();
 
         // when
-        FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fssNew, fssOld);
-        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff();
+        TestFileSystemAccessor fsa = new TestFileSystemAccessor(
+                Map.of(
+                        rootNew.resolve(fileChanged), time.plusSeconds(1),
+                        rootNew.resolve(fileUnchanged), time.plusSeconds(1)),
+                Map.of(
+                        rootNew.resolve(fileChanged), hashNewChanged,
+                        rootNew.resolve(fileUnchanged), hashNewUnchanged)
+        );
+        FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
+        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(rootNew, List.of(fileChanged, fileUnchanged), fssOld);
         Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination);
 
         // then
-        Path expectedAliasLocation =  Path.of("/p/q/rnew/r/a/v");
-        Path expectedAliasTarget =  Path.of("/p/q/rold/r/a/v");
-        CopyAction expectedAliasAction = new SymbolicLinkCopyAction(expectedAliasTarget, expectedAliasLocation);
-        Path expectedCopySource = rootNew.resolve(fileChanged);
-        Path expectedCopyLocation = Path.of("/p/q/rnew/r/a/b/c/f");
-        CopyAction expectedCopyAction = new PlainCopyAction(expectedCopySource, expectedCopyLocation);
+        /*
+            expectedAliasLocation: /p/q/rnew/r/a/v
+            expectedAliasTarget: /p/q/rold/r/a/v
+            No file changed up to the uppermost unchanged directory, which is r/a/v.
+         */
+        CopyAction expectedAliasAction = new SymbolicLinkCopyAction(rootOld, destination, Path.of("r/a/v"));
+        /*
+            expectedCopySource: fileChanged
+            expectedCopyLocation: /p/q/rnew/r/a/b/c/f
+         */
+        CopyAction expectedCopyAction = new PlainCopyAction(rootNew, destination, fileChanged);
+        assertEquals(Set.of(expectedAliasAction, expectedCopyAction), copyActions);
+        assertEquals(new FileSystemDiff.DiffCounts(0, 0, 1, 1, 0), fileSystemDiff.getCounts());
 
-        assertEquals(Set.of(expectedCopyAction, expectedAliasAction), copyActions);
     }
+
 
     /**
      * CURRENT
@@ -164,34 +204,38 @@ public class FileSystemDiffServiceTest {
         Path fileOld = Path.of("tmp/d/d2/fileOld.txt");
         Path fileChanged = Path.of("tmp/d/file.txt");
 
+        Instant time = Instant.now();
 
         // and given: new (current) file state
-        Instant time = Instant.now();
-        FileState hashFileChangedCurrent = new FileState(fileChanged, time, "new byte[] {9}");
-        FileSystemState.Builder builderNew = FileSystemState.builder(rootNew);
-        builderNew.add(hashFileChangedCurrent);
-        FileSystemState fssNew = builderNew.build();
+        CheckpointChecksum hashNewChanged = checksum("new byte[] {9}");
 
         // and given: old file state
-        FileState hashFileOld = new FileState(fileOld, time, "new byte[] {0}");
-        FileState hashFileChanged = new FileState(fileChanged, time, "new byte[] {0}");
+        FileState hashFileOld = new FileState(fileOld, time, checksum("new byte[] {0}"));
+        FileState hashFileChanged = new FileState(fileChanged, time, checksum("new byte[] {0}"));
         FileSystemState.Builder builderOld = FileSystemState.builder(rootOld);
         builderOld.add(hashFileOld);
         builderOld.add(hashFileChanged);
         FileSystemState fssOld = builderOld.build();
 
         // when
-        FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fssNew, fssOld);
-        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff();
+        TestFileSystemAccessor fsa = new TestFileSystemAccessor(
+                Map.of(rootNew.resolve(fileChanged), time.plusSeconds(1)),
+                Map.of(rootNew.resolve(fileChanged), hashNewChanged)
+        );
+        FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
+        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(rootNew, List.of(fileChanged), fssOld);
         Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination);
 
         // then
-        Path expectedCopySource =  Path.of("/x/y/z/tmp/d/file.txt");
-        Path expectedCopyTarget =  Path.of("/p/q/rnew/tmp/d/file.txt");
-        CopyAction expectedCopyAction = new PlainCopyAction(expectedCopySource, expectedCopyTarget);
-
+        /*
+            expectedCopySource: /x/y/z/tmp/d/file.txt
+            expectedCopyTarget: /p/q/rnew/tmp/d/file.txt
+         */
+        CopyAction expectedCopyAction = new PlainCopyAction(rootNew, destination, fileChanged);
         assertEquals(Set.of(expectedCopyAction), copyActions);
+        assertEquals(new FileSystemDiff.DiffCounts(0, 1, 1, 0, 0), fileSystemDiff.getCounts());
     }
+
 
     /**
      * CURRENT
@@ -210,37 +254,44 @@ public class FileSystemDiffServiceTest {
      * /p/q/rnew/
      *  tmp/
      *      d/
-     *          file.txt (direct copy)
+     *          file.txt (symlink)
      */
     @Test
-    public void test_copyAction_deleteOne_RemainingUnChanged_expectAliasCopyOnFiles() {
+    public void test_copyAction_deleteOne_RemainingUnchanged_expectAliasCopyOnFiles() {
         Instant time = Instant.now();
-        Path unchangedFile = Path.of("tmp/d/file.txt");
-        FileSystemState current = FileSystemState.builder(Path.of("/x/y/z"))
-                .add(new FileState(unchangedFile, time, "new byte[] {1}"))
-                .build();
 
+        Path rootNew = Path.of("/x/y/z");
         Path rootOld = Path.of("/p/q/rold");
-        FileSystemState old = FileSystemState.builder(rootOld)
-                .add(new FileState(unchangedFile, time, "new byte[] {1}"))
-                .add(new FileState(Path.of("tmp/d/d2/fileOld.txt"), time, "new byte[] {1}"))
-                .build();
+        Path unchangedFile = Path.of("tmp/d/file.txt");
+        Path noLongerPresentFileOld = Path.of("tmp/d/d2/fileOld.txt");
+
+        CheckpointChecksum unchangedChecksum = checksum("new byte[] {1}");
+
+        FileSystemState.Builder builderOld = FileSystemState.builder(rootOld);
+        builderOld.add(new FileState(unchangedFile, time, unchangedChecksum));
+        builderOld.add(new FileState(noLongerPresentFileOld, time, unchangedChecksum));
+        FileSystemState fssOld = builderOld.build();
+
+        Path destination = Path.of("/p/q/rnew");
 
         // when
-        Path destination = Path.of("/p/q/rnew");
-        FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(current, old);
-        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff();
+        TestFileSystemAccessor fsa = new TestFileSystemAccessor(
+                Map.of(rootNew.resolve(unchangedFile), time.plusSeconds(1)),
+                Map.of(rootNew.resolve(unchangedFile), unchangedChecksum)
+        );
+        FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
+        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(rootNew, List.of(unchangedFile), fssOld);
         Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination);
 
         // then
-        Path expectedSymlinkTarget =  rootOld.resolve(unchangedFile);
-        Path expectedSymlinkLocation =  destination.resolve(unchangedFile);
-        CopyAction expectedCopyAction = new SymbolicLinkCopyAction(expectedSymlinkTarget, expectedSymlinkLocation);
+        CopyAction expectedCopyAction = new SymbolicLinkCopyAction(rootOld, destination, unchangedFile);
 
         assertEquals(Set.of(expectedCopyAction), copyActions);
+        assertEquals(new FileSystemDiff.DiffCounts(0, 1, 0, 1, 0), fileSystemDiff.getCounts());
     }
 
-
-
+    private CheckpointChecksum checksum(String stringContent) {
+        return CheckpointChecksum.from(new ByteArrayInputStream(stringContent.getBytes()));
+    }
 
 }

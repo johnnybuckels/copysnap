@@ -3,17 +3,17 @@ package johnny.buckels.copysnap.service.diffing;
 import java.nio.file.Path;
 import java.util.*;
 
-public class FileSystemNode {
+class FileSystemNode {
 
     private static final Path ROOT_PATH = Path.of("");
     
-    private final Path value;
+    private final Path path;
     private final FileSystemNode parent;
     private final Map<Path, FileSystemNode> children = new HashMap<>();
 
     private boolean changed = false;
 
-    public static FileSystemNode getNew() {
+    static FileSystemNode getNew() {
         return new FileSystemNode();
     }
 
@@ -21,8 +21,8 @@ public class FileSystemNode {
         this(FileSystemNode.ROOT_PATH, null);
     }
 
-    FileSystemNode(Path value, FileSystemNode parent) {
-        this.value = value;
+    FileSystemNode(Path path, FileSystemNode parent) {
+        this.path = path;
         this.parent = parent;
     }
 
@@ -40,13 +40,13 @@ public class FileSystemNode {
      *                 \-(r/c/x)-(r/c/x/y)-(r/c/x/y/z)
      * Returns: (r/c/x/y/z)
      */
-    public FileSystemNode insert(Path relPath) {
+    FileSystemNode insert(Path relPath) {
         if (relPath.isAbsolute())
             throw new IllegalArgumentException("Can not insert absolute path");
-        if (relPath.equals(value))
+        if (relPath.equals(path))
             return this;
-        Path relFromThisToPath = value.relativize(relPath);
-        Path pathToChild = value.resolve(relFromThisToPath.getName(0));
+        Path relFromThisToPath = path.relativize(relPath);
+        Path pathToChild = path.resolve(relFromThisToPath.getName(0));
         FileSystemNode matchingChild = children.get(pathToChild);
         if (matchingChild == null)
             return append(relFromThisToPath);
@@ -54,14 +54,14 @@ public class FileSystemNode {
             return matchingChild.insert(relPath);
     }
 
-    public FileSystemNode getDeepestKnownAlong(Path relPath) {
+    FileSystemNode getDeepestKnownAlong(Path relPath) {
         if (relPath.isAbsolute())
             throw new IllegalArgumentException("Can not process absolute path");
-        if (relPath.equals(value)) {
+        if (relPath.equals(path)) {
             return this;
         }
-        Path relFromThisToPath = value.relativize(relPath);
-        Path pathToChild = value.resolve(relFromThisToPath.getName(0));
+        Path relFromThisToPath = path.relativize(relPath);
+        Path pathToChild = path.resolve(relFromThisToPath.getName(0));
         FileSystemNode matchingChild = children.get(pathToChild);
         if (matchingChild == null)
             return this;
@@ -76,25 +76,25 @@ public class FileSystemNode {
      *                    \-(r/a)-(r/a/b)-(r/a/b/c)
      * Returns: (r/a/b/c)
      */
-    protected FileSystemNode append(Path path) {
+    FileSystemNode append(Path path) {
         if (path.isAbsolute())
             throw new IllegalArgumentException("Can not append absolute path: " + path);
         if (path.getNameCount() == 0)
             return this;
-        Path nextChildPath = value;
+        Path nextChildPath = this.path;
         Iterator<Path> pathElemIt = path.iterator();
         FileSystemNode currentParent = this;
         FileSystemNode nextChild;
         while (pathElemIt.hasNext()) {
             nextChildPath = nextChildPath.resolve(pathElemIt.next());
             nextChild = new FileSystemNode(nextChildPath, currentParent);
-            currentParent.children.put(nextChild.value, nextChild);
+            currentParent.children.put(nextChild.path, nextChild);
             currentParent = nextChild;
         }
         return currentParent;
     }
 
-    public void markAsChanged() {
+    void markAsChanged() {
         this.changed = true;
         FileSystemNode parent = this.parent;
         while(parent != null) {
@@ -116,7 +116,7 @@ public class FileSystemNode {
     }
 
     public boolean isRoot() {
-        return ROOT_PATH.equals(value);
+        return ROOT_PATH.equals(path);
     }
 
     public boolean isChanged() {
@@ -128,11 +128,11 @@ public class FileSystemNode {
     }
 
     public boolean isLeaf() {
-        return children.size() == 0;
+        return children.isEmpty();
     }
 
-    public Path getValue() {
-        return value;
+    public Path getPath() {
+        return path;
     }
 
     public FileSystemNode getParent() {
@@ -155,9 +155,7 @@ public class FileSystemNode {
 
     @Override
     public String toString() {
-        return String.valueOf(value);
+        return String.valueOf(path);
     }
-
-
 
 }

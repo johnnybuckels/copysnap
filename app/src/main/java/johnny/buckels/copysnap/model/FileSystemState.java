@@ -1,103 +1,97 @@
 package johnny.buckels.copysnap.model;
 
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.*;
 
 public class FileSystemState {
 
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
-    private static final char FILE_ENTRY_SEPARATOR_CHAR = Character.MIN_VALUE;
 
+    // TODO: Remove this field. Root path should only matter when callers actually want to access a file system.
     private final Path rootPath;
     private final ZonedDateTime created;
     /**
      * Contains relative FileStates w.r.t. {@link #rootPath}.
      * The absolute paths may be obtained by resolving these FileState's paths against {@link #rootPath}.
      */
-    private final Set<FileState> states;
+    private final Map<Path, FileState> statesByPath;
 
     public static FileSystemState empty() {
-        return new FileSystemState(null, ZonedDateTime.now(), Set.of());
+        return new FileSystemState(null, ZonedDateTime.now(), Map.of());
     }
 
     public static FileSystemState.Builder builder(Path rootPath) {
-        return new Builder(rootPath);
+        return new Builder(rootPath, empty());
     }
 
+    public static FileSystemState.Builder builder(Path rootPath, FileSystemState existingState) {
+        return new Builder(rootPath, existingState);
+    }
+
+    // TODO: Test serde
     /**
      * Reads a file of the form
      * <p>
-     *      #ROOT_PATH
-     *      #DATE
-     *      #HASH;#PATH
-     *      ...
-     *      #HASH;#PATH
+     * #ROOT_PATH
+     * #DATE
+     * #HASH;#PATH
+     * ...
+     * #HASH;#PATH
      * </p>
      */
     public static FileSystemState read(Path path) {
         FileSystemState.Builder builder;
-        try (BufferedReader br = Files.newBufferedReader(path)) {
-            // read first two lines
-            builder = FileSystemState.builder(Path.of(readNextEntry(br).orElseThrow()));
-            readNextEntry(br).orElseThrow(); // reading 'created'-line which is currently unused
-            // read remaining lines
-            Optional<String> nextEntry;
-            while ((nextEntry = readNextEntry(br)).isPresent()) {
-                FileState fs = FileState.parse(nextEntry.get());
+        try (InputStream is = Files.newInputStream(path)) {
+            String rootPathLine = readUntilNextNull(is).orElseThrow(() -> new IllegalStateException("Could not read file system state from %s: Could not retrieve first line".formatted(path)));
+            builder = FileSystemState.builder(Path.of(rootPathLine));
+            // read 'created'-line which is currently unused
+            readUntilNextNull(is).orElseThrow(() -> new IllegalStateException("Could not read file system state from %s: Could not retrieve second line".formatted(path)));
+            
+            Optional<String> nextLineOpt;
+            while ((nextLineOpt = readUntilNextNull(is)).isPresent()) {
+                FileState fs = FileState.deserialize(nextLineOpt.get());
                 builder.add(fs);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("Could not read FileState: " + e, e);
+            throw new UncheckedIOException("Could not read FileSystemState from %s: %s".formatted(path, e.getMessage()), e);
         }
         return builder.build();
     }
 
-    /**
-     * Entries are supposed to be surrounded by {@link #FILE_ENTRY_SEPARATOR_CHAR}.
-     */
-    private static Optional<String> readNextEntry(BufferedReader is) throws IOException {
-        skipUntilNextNull(is);
-        return readUntilNextNull(is);
+    private static Optional<String> readUntilNextNull(InputStream is) throws IOException {
+        ByteBuffer bb = ByteBuffer.allocate(1024);
+        int nextByte;
+        while ((nextByte = is.read()) > -1) {
+           if (nextByte == Character.MIN_VALUE) {
+               // skip new line character
+               long ignored = is.skip(1);
+               ByteBuffer slice = bb.slice(0, bb.position());
+               return Optional.of(StandardCharsets.UTF_8.decode(slice).toString());
+           }
+           if (bb.position() >= bb.capacity()) {
+               ByteBuffer bbNew = ByteBuffer.allocate(bb.capacity() * 2);
+               bb = bbNew.put(bb.array());
+           }
+           bb.put((byte) nextByte);
+        }
+        // the stream is exhausted. We do not return the buffer since no null byte has been found.
+        return Optional.empty();
     }
 
-    private static Optional<String> readUntilNextNull(BufferedReader is) throws IOException {
-        StringBuilder sb = new StringBuilder();
-        int c;
-        do {
-            c = is.read();
-            if (c < 0)
-                return Optional.empty();
-            sb.appendCodePoint(c);
-        } while (c != FILE_ENTRY_SEPARATOR_CHAR);
-        String substring = sb.substring(0, sb.length() - 1);
-        return Optional.of(substring);
-    }
-
-    private static void skipUntilNextNull(BufferedReader is) throws IOException {
-        int c;
-        do {
-            c = is.read();
-            if (c < 0)
-                return;
-        } while (c != FILE_ENTRY_SEPARATOR_CHAR);
-    }
-
-    public FileSystemState(Path rootPath, ZonedDateTime created, Set<FileState> states) {
+    private FileSystemState(Path rootPath, ZonedDateTime created, Map<Path, FileState> statesByPath) {
         this.rootPath = rootPath;
         this.created = created;
-        this.states = states;
+        this.statesByPath = statesByPath;
     }
 
     public Path getRootPath() {
@@ -108,71 +102,82 @@ public class FileSystemState {
         return created;
     }
 
-    /**
-     * @return view of contained states.
-     */
-    public Set<FileState> getStates() {
-        return Collections.unmodifiableSet(states);
+    Set<FileState> getStates() {
+        return new HashSet<>(statesByPath.values());
+    }
+
+    public Optional<FileState> get(Path relativePath) {
+        return Optional.ofNullable(statesByPath.get(relativePath));
+    }
+
+    public Map<Path, FileState> computeMissingStates(Collection<Path> paths) {
+        HashMap<Path, FileState> statesCopy = new HashMap<>(statesByPath);
+        paths.forEach(statesCopy::remove);
+        return statesCopy;
     }
 
     /**
      * Returns new object identical to this but with the specified root path.
      */
-    public FileSystemState switchRootTo(Path newRoot) {
-        return new FileSystemState(newRoot, created, states);
+    public FileSystemState withRoot(Path newRoot) {
+        return new FileSystemState(newRoot, created, statesByPath);
     }
 
     /**
      * Writes a file of the form
      * <p>
-     *      #ROOT_PATH
-     *      #DATE
-     *      #HASH;#PATH
-     *      ...
-     *      #HASH;#PATH
+     * ROOT_PATH\NUL\n
+     * date\NUL\n
+     * checksum;modified;path\NUL\n
+     * ...
+     * checksum;modified;path\NUL\n
      * </p>
      */
-    public void writeTo(Path path) {
+    public void write(Path path) {
         try (BufferedWriter bw = Files.newBufferedWriter(path, StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
-            writeString(bw, rootPath.toString());
-            writeString(bw, created.format(DATE_TIME_FORMATTER));
-            for (FileState fileState : states) {
-                writeString(bw, fileState.toStringRepresentation());
+            writeLine(bw, rootPath.toString());
+            writeLine(bw, created.format(DATE_TIME_FORMATTER));
+            for (FileState fileState : statesByPath.values()) {
+                writeLine(bw, fileState.serialize());
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("Could not write FileSystemState: " + e, e);
+            throw new UncheckedIOException("Could not write FileSystemState to %s: %s".formatted(path, e.getMessage()), e);
         }
     }
 
     /**
-     * Each line is surrounded by {@link #FILE_ENTRY_SEPARATOR_CHAR}.
+     * Each line is surrounded by {@link Byte#}.
      * When parsing the file, line-wise reading could lead to errors since the path-strings may contain new-line
      * characters. To solve that issue, we decide to put "anchors" around each entry.
      * We also put new-line characters between each entry, to maintain human readability.
      */
-    private void writeString(BufferedWriter bw, String s) throws IOException {
-        bw.write(FILE_ENTRY_SEPARATOR_CHAR);
+    private void writeLine(BufferedWriter bw, String s) throws IOException {
         bw.write(s);
-        bw.write(FILE_ENTRY_SEPARATOR_CHAR);
+        bw.write(Character.MIN_VALUE);
         bw.newLine();
     }
 
+    /**
+     * Not thread safe
+     */
     public static class Builder {
 
         private final Path root;
-        private final ConcurrentLinkedQueue<FileState> states = new ConcurrentLinkedQueue<>();
+        private final Map<Path, FileState> statesByPath;
 
-        private Builder(Path root) {
+        private Builder(Path root, FileSystemState existingState) {
             this.root = root;
+            this.statesByPath = new HashMap<>(existingState.statesByPath);
         }
 
-        public Builder add(FileState fileState) {
-            states.add(fileState);
-            return this;
+        public void add(FileState fileState) {
+            if (fileState.getPath().isAbsolute())
+                throw new IllegalArgumentException("Can not add absolute path: " + fileState.getPath());
+            statesByPath.put(fileState.getPath(), fileState);
         }
 
         public FileSystemState build() {
-            return new FileSystemState(root, ZonedDateTime.now(), new HashSet<>(states));
+            return new FileSystemState(root, ZonedDateTime.now(), statesByPath);
         }
 
     }

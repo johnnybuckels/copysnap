@@ -1,7 +1,5 @@
 package johnny.buckels.copysnap.model;
 
-import johnny.buckels.copysnap.service.exception.IllegalPropertiesException;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.UncheckedIOException;
