@@ -24,12 +24,12 @@ public class FileSystemDiffService extends AbstractMessageProducer {
 
     /**
      * This method accesses the file system.
-     * @param root The absolute path where the relative paths reside in. Used to access actual files on disk.
+     * @param rootDirLocation The absolute path where the relative paths reside in. Used to access actual files on disk.
      * @param newRelativePaths List of relative file paths
      */
-    public FileSystemDiff computeDiff(Path root, List<Path> newRelativePaths, FileSystemState oldSystemState) {
-        if (!root.isAbsolute())
-            throw new IllegalArgumentException("Can not process non-absolute root path: " + root);
+    public FileSystemDiff computeDiff(Path rootDirLocation, List<Path> newRelativePaths, FileSystemState oldSystemState) {
+        if (!rootDirLocation.isAbsolute())
+            throw new IllegalArgumentException("Can not process non-absolute rootDirLocation path: " + rootDirLocation);
         FileSystemNode systemDiffTree = FileSystemNode.getNew();
         int newCount = 0;
         int changedCount = 0;
@@ -39,7 +39,7 @@ public class FileSystemDiffService extends AbstractMessageProducer {
         // determine changed existing changed files
         for (Path currentNewPath : newRelativePaths) {
             FileSystemNode newNode = systemDiffTree.insert(currentNewPath);
-            switch (determineChange(oldSystemState, root, currentNewPath)) {
+            switch (determineChange(oldSystemState, rootDirLocation, currentNewPath)) {
                 case UNCHANGED -> unchangedCount++;
                 case CHANGED -> {
                     changedCount++;
@@ -64,7 +64,7 @@ public class FileSystemDiffService extends AbstractMessageProducer {
         int removedCount = noLongerPresentStates.size();
         messageConsumer.consumeMessage(Message.info("New: %s, Changed: %s, Removed: %s, Unchanged: %s, Errors: %s",
                 newCount, changedCount, removedCount, unchangedCount, errorCount));
-        return new FileSystemDiff(root, oldSystemState.getRootPath(), systemDiffTree, new FileSystemDiff.DiffCounts(newCount, removedCount, changedCount, unchangedCount, errorCount));
+        return new FileSystemDiff(rootDirLocation, oldSystemState.getRootPath(), systemDiffTree, new FileSystemDiff.DiffCounts(newCount, removedCount, changedCount, unchangedCount, errorCount));
     }
 
     private FileChangeState determineChange(FileSystemState oldSystemState, Path root, Path newRelFilePath) {

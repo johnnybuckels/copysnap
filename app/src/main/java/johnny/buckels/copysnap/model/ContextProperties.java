@@ -18,7 +18,7 @@ public class ContextProperties {
     private static final String LAST_MODIFIED_KEY = "lastModified";
     private static final String REFERENCE_SNAPSHOT_KEY = "referenceSnapshot";
 
-    private final Path sourceDir;
+    private final Root sourceRoot;
     private final Path snapshotsHomeDir;
     private final ZonedDateTime created;
     private final ZonedDateTime lastModified; // nullable
@@ -31,7 +31,7 @@ public class ContextProperties {
 
     public static ContextProperties getNew(Path sourceDir, Path snapshotsHomeDir) {
         ZonedDateTime now = ZonedDateTime.now();
-        return new ContextProperties(sourceDir, snapshotsHomeDir, now, now, null);
+        return new ContextProperties(Root.from(sourceDir), snapshotsHomeDir, now, now, null);
     }
 
     public static ContextProperties readFrom(Properties properties) throws IllegalPropertiesException {
@@ -45,7 +45,7 @@ public class ContextProperties {
                 .orElse(null);
         Path referenceSnapshot = Optional.ofNullable(properties.getProperty(REFERENCE_SNAPSHOT_KEY)).map(Path::of).map(Path::toAbsolutePath)
                 .orElse(null);
-        return new ContextProperties(sourceDir, snapshotsHomeDir, created, lastModified, referenceSnapshot);
+        return new ContextProperties(Root.from(sourceDir), snapshotsHomeDir, created, lastModified, referenceSnapshot);
     }
 
     /**
@@ -59,11 +59,11 @@ public class ContextProperties {
                 .orElseThrow(() -> new IllegalArgumentException(String.format(PROPERTIES_EXCEPTION_TEMPLATE, SOURCE_DIR_KEY)));
         Path snapshotsHomeDir = Optional.ofNullable(properties.getProperty(SNAPSHOTS_HOME_DIR_KEY)).map(Path::of)
                 .orElseThrow(() -> new IllegalArgumentException(String.format(PROPERTIES_EXCEPTION_TEMPLATE, SNAPSHOTS_HOME_DIR_KEY)));
-        return new ContextProperties(sourceDir, snapshotsHomeDir, ZonedDateTime.now(), null, null);
+        return new ContextProperties(Root.from(sourceDir), snapshotsHomeDir, ZonedDateTime.now(), null, null);
     }
 
-    private ContextProperties(Path sourceDir, Path snapshotsHomeDir, ZonedDateTime created, ZonedDateTime lastModified, Path referenceSnapshot) {
-        this.sourceDir = sourceDir;
+    private ContextProperties(Root sourceRoot, Path snapshotsHomeDir, ZonedDateTime created, ZonedDateTime lastModified, Path referenceSnapshot) {
+        this.sourceRoot = sourceRoot;
         this.snapshotsHomeDir = snapshotsHomeDir;
         this.created = created;
         this.lastModified = lastModified;
@@ -71,7 +71,7 @@ public class ContextProperties {
     }
 
     public ContextProperties getNewUpdated(Path newReferenceSnapshot) {
-        return new ContextProperties(sourceDir, snapshotsHomeDir, created, ZonedDateTime.now(), newReferenceSnapshot);
+        return new ContextProperties(sourceRoot, snapshotsHomeDir, created, ZonedDateTime.now(), newReferenceSnapshot);
     }
 
     /**
@@ -79,7 +79,7 @@ public class ContextProperties {
      */
     public void write(Path destination) throws IOException {
         Properties properties = new Properties();
-        properties.put(SOURCE_DIR_KEY, sourceDir.toString());
+        properties.put(SOURCE_DIR_KEY, sourceRoot.pathToRootDir().toString());
         properties.put(SNAPSHOTS_HOME_DIR_KEY, snapshotsHomeDir.toString());
         properties.put(CREATED_KEY, created.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
         if (lastModified != null)
@@ -92,8 +92,8 @@ public class ContextProperties {
         }
     }
 
-    public Path getSourceDir() {
-        return sourceDir;
+    public Root getSourceRoot() {
+        return sourceRoot;
     }
 
     public Path getSnapshotsHomeDir() {
@@ -109,7 +109,7 @@ public class ContextProperties {
     }
 
     public String toDisplayString() {
-        return String.format("%24s: %s", "source", sourceDir) +
+        return String.format("%24s: %s", "source", sourceRoot) +
                 "\n" + String.format("%24s: %s", "home", snapshotsHomeDir) +
                 "\n" + String.format("%24s: %s", "created", created.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)) +
                 "\n" + String.format("%24s: %s", "last modified", getLastModified().map(t -> t.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)).orElse("")) +

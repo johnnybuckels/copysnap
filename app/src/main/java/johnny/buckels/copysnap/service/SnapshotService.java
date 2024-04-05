@@ -1,6 +1,7 @@
 package johnny.buckels.copysnap.service;
 
 import johnny.buckels.copysnap.model.FileSystemState;
+import johnny.buckels.copysnap.model.Root;
 import johnny.buckels.copysnap.service.diffing.FileSystemAccessor;
 import johnny.buckels.copysnap.service.diffing.FileSystemDiff;
 import johnny.buckels.copysnap.service.diffing.FileSystemDiffService;
@@ -9,19 +10,21 @@ import johnny.buckels.copysnap.service.logging.AbstractMessageProducer;
 import johnny.buckels.copysnap.service.logging.Message;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.FileVisitOption;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 
 public class SnapshotService extends AbstractMessageProducer {
 
-    private final Path root;
-    private final List<Path> newPaths;
+    private final Root sourceRoot;
     private final FileSystemState oldState;
 
-    public SnapshotService(Path root, List<Path> newPaths, FileSystemState oldState) {
-        this.root = root;
-        this.newPaths = newPaths;
+    public SnapshotService(Root sourceRoot,FileSystemState oldState) {
+        this.sourceRoot = sourceRoot;
         this.oldState = oldState;
     }
 
@@ -31,10 +34,10 @@ public class SnapshotService extends AbstractMessageProducer {
      */
     public FileSystemState createNewSnapshot(Path destination) {
         messageConsumer.consumeMessage(Message.info("Creating new snapshot at " + destination));
-
+        List<Path> newPaths = gatherNewPaths();
         FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(FileSystemAccessor.newDefaultAccessor());
         fileSystemDiffService.setMessageConsumer(messageConsumer);
-        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(root, newPaths, oldState);
+        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(sourceRoot.rootDirLocation(), newPaths, oldState);
 
         Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination);
         int performedCount = 0;
@@ -51,6 +54,17 @@ public class SnapshotService extends AbstractMessageProducer {
         }
         messageConsumer.newLine();
         return newStateBuilder.build();
+    }
+
+    private List<Path> gatherNewPaths() {
+        try (Stream<Path> files = Files.walk(sourceRoot.pathToRootDir(), FileVisitOption.FOLLOW_LINKS)) {
+            return files
+                    .filter(Files::isRegularFile)
+                    .map(p -> sourceRoot.rootDirLocation().relativize(p))
+                    .toList();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not iterate over directory contents at " + sourceRoot + ": " + e.getMessage(), e);
+        }
     }
 
 }
