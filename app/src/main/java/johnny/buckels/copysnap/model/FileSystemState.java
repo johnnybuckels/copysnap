@@ -17,7 +17,6 @@ public class FileSystemState {
 
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
 
-    // TODO: Remove this field. Root path should only matter when callers actually want to access a file system.
     private final Path rootPath;
     private final ZonedDateTime created;
     /**
@@ -38,15 +37,14 @@ public class FileSystemState {
         return new Builder(rootPath, existingState);
     }
 
-    // TODO: Test serde
     /**
      * Reads a file of the form
      * <p>
      * #ROOT_PATH
      * #DATE
-     * #HASH;#PATH
+     * #HASH & PATH
      * ...
-     * #HASH;#PATH
+     * #HASH & #PATH
      * </p>
      */
     public static FileSystemState read(Path path) {
@@ -88,8 +86,8 @@ public class FileSystemState {
         return Optional.empty();
     }
 
-    private FileSystemState(Path rootPath, ZonedDateTime created, Map<Path, FileState> statesByPath) {
-        this.rootPath = rootPath;
+    private FileSystemState(Path rootLocation, ZonedDateTime created, Map<Path, FileState> statesByPath) {
+        this.rootPath = rootLocation;
         this.created = created;
         this.statesByPath = statesByPath;
     }
@@ -119,8 +117,8 @@ public class FileSystemState {
     /**
      * Returns new object identical to this but with the specified root path.
      */
-    public FileSystemState withRoot(Path newRoot) {
-        return new FileSystemState(newRoot, created, statesByPath);
+    public FileSystemState withRootLocation(Path newRootLocation) {
+        return new FileSystemState(newRootLocation, created, statesByPath);
     }
 
     /**

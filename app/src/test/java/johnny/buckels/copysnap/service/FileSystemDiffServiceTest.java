@@ -22,6 +22,16 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
+/**
+ *                       FileSystem                        CopySnapCopies
+ * rootLocationNew -->   someDir                           ...
+ *                           |- Root                          |- 2024-02-23   <---- rootLocationOld
+ *                               |-...                            |- Root
+ *                               |-...                                |-...
+ *                                                                    |-...
+ *                                                            |- 2024-04-04     <---- destination
+ *                                                                |- (about to copy here...)
+ */
 public class FileSystemDiffServiceTest {
 
     private record TestFileSystemAccessor(
@@ -119,7 +129,36 @@ public class FileSystemDiffServiceTest {
 
     }
 
-
+    /**
+     * CURRENT
+     * /x/y/z/
+     *      r/
+     *          a/
+     *              b/
+     *                  c/
+     *                      f (changed)
+     *              v/
+     *                  w/
+     *                      F (unchanged)
+     * OLD
+     * /p/q/rold
+     *      r/
+     *          a/
+     *              b/
+     *                  c/
+     *                      f (changed)
+     *              v/
+     *                  w/
+     *                      F (unchanged)
+     * EXPECT SNAPSHOT
+     * /p/q/rnew/
+     *      r/
+     *          a/
+     *              b/
+     *                  c/
+     *                      f (direct copy)
+     *              v/      (alias to /p/q/rold/r/a/v)
+     */
     @Test
     public void test_copyActions_aliasAndCopy() {
         Path rootNew = Path.of("/x/y/z");
@@ -172,7 +211,6 @@ public class FileSystemDiffServiceTest {
         CopyAction expectedCopyAction = new PlainCopyAction(rootNew, destination, fileChanged);
         assertEquals(Set.of(expectedAliasAction, expectedCopyAction), copyActions);
         assertEquals(new FileSystemDiff.DiffCounts(0, 0, 1, 1, 0), fileSystemDiff.getCounts());
-
     }
 
 

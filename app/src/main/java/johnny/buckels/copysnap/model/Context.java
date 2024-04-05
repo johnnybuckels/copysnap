@@ -7,11 +7,12 @@ import johnny.buckels.copysnap.service.logging.MessageConsumer;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.List;
 import java.util.Objects;
 import java.util.stream.Stream;
 
@@ -27,13 +28,12 @@ public class Context extends AbstractMessageProducer {
     }
 
     public void createSnapshot() {
-        List<Path> newPaths = gatherRelativePaths(properties.getSourceDir());
         Path newSnapshotDir = properties.getSnapshotsHomeDir().resolve(generateSnapshotName());
 
-        SnapshotService snapshotService = new SnapshotService(properties.getSourceDir(), newPaths, loadLatestFileSystemState());
+        SnapshotService snapshotService = new SnapshotService(properties.getSourceRoot(), loadLatestFileSystemState());
         snapshotService.setMessageConsumer(messageConsumer);
         FileSystemState newState = snapshotService.createNewSnapshot(newSnapshotDir);
-        writeLatestFileSystemState(newState.withRoot(newSnapshotDir));
+        writeLatestFileSystemState(newState.withRootLocation(newSnapshotDir));
         properties = properties.getNewUpdated(newSnapshotDir);
     }
 
@@ -42,7 +42,7 @@ public class Context extends AbstractMessageProducer {
      * @param sourceDir The directory to compute the new state from.
      */
     public void recomputeFileSystemState(Path sourceDir) {
-        FileSystemState fileSystemState = computeFileSystemState(sourceDir);
+        FileSystemState fileSystemState = computeFileSystemState(Root.from(sourceDir));
         properties = properties.getNewUpdated(fileSystemState.getRootPath());
         writeLatestFileSystemState(fileSystemState);
     }
@@ -72,31 +72,35 @@ public class Context extends AbstractMessageProducer {
         return properties.toDisplayString();
     }
 
-    // TODO: Remove and replace with mechanism only hashing files that are about to be copied.
-    private FileSystemState computeFileSystemState(Path sourceDir) {
-        throw new IllegalStateException("IMPLEMENT WITH NEW LOGiC OR REMOVE");
-//        ParallelHashingService parallelHashingService = new ParallelHashingService();
-//        parallelHashingService.setMessageConsumer(messageConsumer);
-//        return parallelHashingService.computeState(sourceDir);
+    private FileSystemState computeFileSystemState(Root root) {
+        FileSystemState.Builder builder = FileSystemState.builder(root.rootDirLocation());
+        try (Stream<Path> files = Files.walk(root.pathToRootDir(), FileVisitOption.FOLLOW_LINKS)) {
+            files
+                    .filter(Files::isRegularFile)
+                    .map(absPath -> fileState(root.rootDirLocation(), absPath))
+                    .forEach(builder::add);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not iterate over directory contents at " + properties.getSourceRoot() + ": " + e.getMessage(), e);
+        }
+        return builder.build();
     }
 
-    private List<Path> gatherRelativePaths(Path targetDirectory) {
-        /*
-        In order to store file hashes with relative paths, we determine the directory where the file system to create
-        hashes from is located in.
-        Example: targetDirectory: /x/y/z/r
-        Actual file hashes: /x/y/z/r/a/b/f1, /x/y/z/r/a/p/q/f2, /x/y/z/r/f3
-        Relative file hashes: r/a/b/f1, r/a/p/q/f2, r/f3
-         */
-        Path rootPath = Objects.requireNonNullElse(targetDirectory.getParent(), targetDirectory);
-        try (Stream<Path> files = Files.walk(targetDirectory)) {
-            return files
-                    .filter(Files::isRegularFile)
-                    .map(rootPath::relativize)
-                    .toList();
+    private FileState fileState(Path rootToRelativizeAgainst, Path absPath) {
+        Instant lastModified;
+        try {
+            lastModified = Files.getLastModifiedTime(absPath).toInstant();
         } catch (IOException e) {
-            throw new UncheckedIOException("Could not iterate over directory contents during hashing at " + rootPath + ": " + e.getMessage(), e);
+            messageConsumer.consumeMessage(Message.error("Could not read last modified from %s: %s".formatted(absPath, e.getMessage())), e);
+            lastModified = Instant.now();
         }
+        CheckpointChecksum checksum;
+        try {
+            checksum = CheckpointChecksum.from(Files.newInputStream(absPath));
+        } catch (IOException e) {
+            messageConsumer.consumeMessage(Message.error("Could not create checksum from %s: %s".formatted(absPath, e.getMessage())), e);
+            checksum = CheckpointChecksum.undefined();
+        }
+        return new FileState(rootToRelativizeAgainst.relativize(absPath), lastModified, checksum);
     }
 
     private String generateSnapshotName() {

@@ -47,8 +47,9 @@ public class Main {
         } catch (CliHelpCallException e) {
             MESSAGE_CONSUMER.consumeMessage(Message.info(e.getMessage()));
         } catch (CliException e) {
-            MESSAGE_CONSUMER.consumeMessage(Message.error(e.getMessage()), e);
+            MESSAGE_CONSUMER.consumeMessage(Message.error(e.getMessage()));
         }
+        MESSAGE_CONSUMER.newLine();
         MESSAGE_CONSUMER.consumeMessage(Message.info("Executing CopySnap command took %s ms", Duration.between(start, ZonedDateTime.now()).toMillis()));
         MESSAGE_CONSUMER.close();
     }

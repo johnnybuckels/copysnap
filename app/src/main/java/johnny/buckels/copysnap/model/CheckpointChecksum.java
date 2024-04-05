@@ -9,11 +9,14 @@ import java.util.stream.Collectors;
 import java.util.zip.CRC32;
 import java.util.zip.Checksum;
 
-public class CheckpointChecksum {
+public record CheckpointChecksum(List<Long> checksums) {
 
     private static final String CHECKSUM_SERDE_DELIMITER = ",";
+    private static final CheckpointChecksum UNDEFINED_CHECKSUM = new CheckpointChecksum(List.of(-1L));
 
-    private final List<Long> checksums;
+    public static CheckpointChecksum undefined() {
+        return UNDEFINED_CHECKSUM;
+    }
 
     /**
      * Creates a checksum while transferring the given input stream to the specified output stream.
@@ -32,10 +35,9 @@ public class CheckpointChecksum {
         return new CheckpointChecksum(Collections.unmodifiableList(checksums));
     }
 
-    CheckpointChecksum(List<Long> checksums) {
+    public CheckpointChecksum {
         if (checksums.isEmpty())
             throw new IllegalArgumentException("Empty checksums");
-        this.checksums = checksums;
     }
 
     /**
@@ -57,6 +59,8 @@ public class CheckpointChecksum {
      * Implements a "fail fast" check comparing multiple checksums based on checkpoints.
      */
     public boolean hasSameChecksum(InputStream is) {
+        if (this.equals(UNDEFINED_CHECKSUM))
+            return false;
         CheckpointIterator checkpointIterator = new CheckpointIterator(is, OutputStream.nullOutputStream());
         for (Long expectedChecksum : checksums) {
             if (checkpointIterator.hasNext()) {
@@ -70,19 +74,6 @@ public class CheckpointChecksum {
     }
 
     private record CheckpointResult(Checksum checksum, long nextCheckpoint, long totalReadBytes, int latestReadByteCount) {}
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        CheckpointChecksum checksum = (CheckpointChecksum) o;
-        return Objects.equals(checksums, checksum.checksums);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(checksums);
-    }
 
     /**
      * Not reusable.
