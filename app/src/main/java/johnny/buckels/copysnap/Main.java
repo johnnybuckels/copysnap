@@ -66,8 +66,7 @@ public class Main {
         Path sourceDirResolved = resolvePathToCwd(source);
         Context context = Contexts.createNew(sourceDirResolved, cwd);
 
-        Path contextPropertiesPath = context.writeProperties();
-        updateCurrentContextInAppProperties(contextPropertiesPath);
+        setCurrentContextInAppProperties(context.writeAndGet().getContextHome());
 
         MESSAGE_CONSUMER.consumeMessage(Message.info("Initialised context"));
         MESSAGE_CONSUMER.consumeMessage(Message.info(context.toDisplayString()));
@@ -84,8 +83,7 @@ public class Main {
         Path searchPathResolved = resolvePathToCwd(path);
         Context context = Contexts.load(searchPathResolved);
 
-        Path contextPropertiesPath = context.writeProperties();
-        updateCurrentContextInAppProperties(contextPropertiesPath);
+        setCurrentContextInAppProperties(context.getContextHome());
 
         MESSAGE_CONSUMER.consumeMessage(Message.info("Loaded context"));
         MESSAGE_CONSUMER.consumeMessage(Message.info(context.toDisplayString()));
@@ -120,12 +118,9 @@ public class Main {
             MESSAGE_CONSUMER.consumeMessage(Message.info("No context loaded."));
             return;
         }
-        Context context = contextOpt.get()
-                .withMessageConsumer(quiet ? MessageConsumer.quiet() : MESSAGE_CONSUMER);
+        Context context = contextOpt.get();
+//                .withMessageConsumer(quiet ? MessageConsumer.quiet() : MESSAGE_CONSUMER);
         context.createSnapshot();
-
-        Path latestContextPath = context.writeProperties();
-        updateCurrentContextInAppProperties(latestContextPath);
     }
 
     /**
@@ -139,18 +134,17 @@ public class Main {
             @Argument(necessity = REQUIRED, type = OPERAND) Path path
     ) {
         Path resolvePath = resolvePathToCwd(path);
-        Context context = Contexts.repairAndLoad(resolvePath);
+        Context minimalContext = Contexts.loadMinimal(resolvePath);
 
-        Path latestContextPath = context.writeProperties();
-        updateCurrentContextInAppProperties(latestContextPath);
+        setCurrentContextInAppProperties(minimalContext.writeAndGet().getContextHome());
 
         MESSAGE_CONSUMER.consumeMessage(Message.info("Repaired context."));
-        MESSAGE_CONSUMER.consumeMessage(Message.info(context.toDisplayString()));
+        MESSAGE_CONSUMER.consumeMessage(Message.info(minimalContext.toDisplayString()));
     }
 
     /**
-     * Computes the file state of a specified directory saves it to the current context.
-     * This method intends to repair a broken or lost file system state of a previous snapshot.
+     * Computes the file state of a specified directory and saves it as "latest" file system state to the current context.
+     * Use this method to repair a broken or lost file system state of a previous snapshot.
      * @param directory The directory to compute a new file state of.
      * @param quiet If set, no console output will be printed.
      */
@@ -165,11 +159,12 @@ public class Main {
             MESSAGE_CONSUMER.consumeMessage(Message.info("No context loaded."));
             return;
         }
-        Context context = contextOpt.get().withMessageConsumer(quiet ? MessageConsumer.quiet() : MESSAGE_CONSUMER);
+        Context context = contextOpt.get();
+//                .withMessageConsumer(quiet ? MessageConsumer.quiet() : MESSAGE_CONSUMER);
+        if (!resolvedPath.startsWith(context.getContextHome())) {
+            MESSAGE_CONSUMER.consumeMessage(Message.error("Can not compute file state outside of home path %s: %s".formatted(context.getContextHome(), resolvedPath)));
+        }
         context.recomputeFileSystemState(resolvedPath);
-
-        Path contextPropertiesPath = context.writeProperties();
-        updateCurrentContextInAppProperties(contextPropertiesPath);
     }
 
     private static Optional<Context> getLatestLoadedContext() {
@@ -205,8 +200,8 @@ public class Main {
         return properties;
     }
 
-    private static void updateCurrentContextInAppProperties(Path latestContextPath) {
-        APP_PROPERTIES.put(CURRENT_CONTEXT_PROPERTY_NAME, latestContextPath.toString());
+    private static void setCurrentContextInAppProperties(Path contextPath) {
+        APP_PROPERTIES.put(CURRENT_CONTEXT_PROPERTY_NAME, contextPath.toString());
         try {
             writeAppProperties();
         } catch (IOException e) {

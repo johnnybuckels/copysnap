@@ -1,7 +1,8 @@
 package johnny.buckels.copysnap.service.diffing.copy;
 
+import johnny.buckels.copysnap.service.diffing.FileSystemAccessor;
+
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
 
@@ -17,10 +18,10 @@ abstract class AbstractCopyAction implements CopyAction {
         this.relPath = relPath;
     }
 
-    void createParentDirs(Path p) throws IOException {
+    void createParentDirs(Path p, FileSystemAccessor fsa) throws IOException {
         Path parent = p.getParent();
         if (parent != null)
-            Files.createDirectories(parent);
+            fsa.createDirectories(parent);
     }
 
     @Override

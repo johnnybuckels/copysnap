@@ -1,6 +1,7 @@
 package johnny.buckels.copysnap.service.diffing.copy;
 
 import johnny.buckels.copysnap.model.FileState;
+import johnny.buckels.copysnap.service.diffing.FileSystemAccessor;
 
 import java.io.IOException;
 import java.util.Optional;
@@ -10,8 +11,7 @@ public interface CopyAction {
 
     /**
      * @return The FileState of the copied file if available.
-     * The path may be absolute as copy actions operate on absolute paths.
      */
-    Optional<FileState> perform() throws IOException;
+    Optional<FileState> perform(FileSystemAccessor fsa) throws IOException;
 
 }

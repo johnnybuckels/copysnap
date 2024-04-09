@@ -44,9 +44,9 @@ public class FileSystemStateTest {
 
         // when ser + de
         Path tempFile = Files.createTempFile(TMP_FILE_PATH, "tmpfile" + System.currentTimeMillis(), ".tmp");
-        fst.write(tempFile);
+        fst.write(Files.newBufferedWriter(tempFile));
         long serEnd = System.currentTimeMillis();
-        FileSystemState deserializedFst = FileSystemState.read(tempFile);
+        FileSystemState deserializedFst = FileSystemState.read(Files.newInputStream(tempFile));
         long deEnd = System.currentTimeMillis();
 
         // then
@@ -55,8 +55,8 @@ public class FileSystemStateTest {
         System.out.println("Init: " + (initEnd - start) / 1000.0);
         System.out.println("Ser: " + (serEnd - initEnd) / 1000.0);
         System.out.println("De: " + (deEnd - serEnd) / 1000.0);
-        assertEquals(fst.getRootPath(), deserializedFst.getRootPath());
-        assertEquals(fst.getStates(), deserializedFst.getStates());
+        assertEquals(fst.info().rootLocation(), deserializedFst.info().rootLocation());
+        assertEquals(fst.getStatesView(), deserializedFst.getStatesView());
     }
 
     /**

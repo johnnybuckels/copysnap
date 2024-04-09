@@ -2,15 +2,19 @@ package johnny.buckels.copysnap.service.diffing;
 
 import johnny.buckels.copysnap.model.FileState;
 import johnny.buckels.copysnap.model.FileSystemState;
+import johnny.buckels.copysnap.model.Root;
 import johnny.buckels.copysnap.service.logging.AbstractMessageProducer;
 import johnny.buckels.copysnap.service.logging.Message;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.List;
-import java.util.Map;
+import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 
 public class FileSystemDiffService extends AbstractMessageProducer {
 
@@ -24,47 +28,58 @@ public class FileSystemDiffService extends AbstractMessageProducer {
 
     /**
      * This method accesses the file system.
-     * @param rootDirLocation The absolute path where the relative paths reside in. Used to access actual files on disk.
-     * @param newRelativePaths List of relative file paths
+     * @param sourceRoot The root object to take a snapshot from.
      */
-    public FileSystemDiff computeDiff(Path rootDirLocation, List<Path> newRelativePaths, FileSystemState oldSystemState) {
-        if (!rootDirLocation.isAbsolute())
-            throw new IllegalArgumentException("Can not process non-absolute rootDirLocation path: " + rootDirLocation);
+    public FileSystemDiff computeDiff(Root sourceRoot, FileSystemState oldSystemState) {
+        AtomicInteger newCount = new AtomicInteger();
+        AtomicInteger changedCount = new AtomicInteger();
+        AtomicInteger unchangedCount = new AtomicInteger();
+        AtomicInteger errorCount = new AtomicInteger();
+        Set<Path> processedNewFiles = new HashSet<>();
         FileSystemNode systemDiffTree = FileSystemNode.getNew();
-        int newCount = 0;
-        int changedCount = 0;
-        int unchangedCount = 0;
-        int errorCount = 0;
-
-        // determine changed existing changed files
-        for (Path currentNewPath : newRelativePaths) {
-            FileSystemNode newNode = systemDiffTree.insert(currentNewPath);
-            switch (determineChange(oldSystemState, rootDirLocation, currentNewPath)) {
-                case UNCHANGED -> unchangedCount++;
-                case CHANGED -> {
-                    changedCount++;
-                    newNode.markAsChanged();
-                }
-                case NEW -> {
-                    newCount++;
-                    newNode.markAsChanged();
-                }
-                case ERROR -> {
-                    errorCount++;
-                    newNode.markAsChanged();
-                }
-            }
+        try (Stream<Path> paths = fileSystemAccessor.findFiles(sourceRoot.pathToRootDir())) {
+            paths
+                .map(p -> sourceRoot.rootDirLocation().relativize(p))
+                .forEach(currentNewPath -> {
+                    // determine changed existing changed files
+                    FileSystemNode newNode = systemDiffTree.insert(currentNewPath);
+                    switch (determineChange(oldSystemState, sourceRoot.rootDirLocation(), currentNewPath)) {
+                        case UNCHANGED -> unchangedCount.getAndIncrement();
+                        case CHANGED -> {
+                            changedCount.getAndIncrement();
+                            newNode.markAsChanged();
+                        }
+                        case NEW -> {
+                            newCount.getAndIncrement();
+                            newNode.markAsChanged();
+                        }
+                        case ERROR -> {
+                            errorCount.getAndIncrement();
+                            newNode.markAsChanged();
+                        }
+                    }
+                    processedNewFiles.add(currentNewPath);
+                });
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not iterate over directory contents at " + sourceRoot + ": " + e.getMessage(), e);
         }
+
         // determine no longer present files and mark former containing directories as changed
-        Map<Path, FileState> noLongerPresentStates = oldSystemState.computeMissingStates(newRelativePaths);
-        for (FileState fileState : noLongerPresentStates.values()) {
-            systemDiffTree.getDeepestKnownAlong(fileState.getPath()).markAsChanged();
+        FileSystemState remainingStates = oldSystemState.newByRemovingMissing(processedNewFiles);
+        FileSystemState removedStates = oldSystemState.newBySetMinus(remainingStates);
+        for (Path noLongerPresentPaths : removedStates.statesByPath().keySet()) {
+            systemDiffTree.getDeepestKnownAlong(noLongerPresentPaths).markAsChanged();
         }
 
-        int removedCount = noLongerPresentStates.size();
+        int removedCount = removedStates.info().itemCount();
         messageConsumer.consumeMessage(Message.info("New: %s, Changed: %s, Removed: %s, Unchanged: %s, Errors: %s",
                 newCount, changedCount, removedCount, unchangedCount, errorCount));
-        return new FileSystemDiff(rootDirLocation, oldSystemState.getRootPath(), systemDiffTree, new FileSystemDiff.DiffCounts(newCount, removedCount, changedCount, unchangedCount, errorCount));
+        return new FileSystemDiff(
+                sourceRoot,
+                remainingStates,
+                systemDiffTree,
+                new FileSystemDiff.DiffCounts(newCount.get(), removedCount, changedCount.get(), unchangedCount.get(), errorCount.get())
+        );
     }
 
     private FileChangeState determineChange(FileSystemState oldSystemState, Path root, Path newRelFilePath) {

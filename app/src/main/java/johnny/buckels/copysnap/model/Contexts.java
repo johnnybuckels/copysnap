@@ -36,7 +36,7 @@ public class Contexts {
         Properties properties = findPlainProperties(path);
         ContextProperties contextProperties;
         try {
-            contextProperties = ContextProperties.readFrom(properties);
+            contextProperties = ContextProperties.read(properties);
         } catch (IllegalPropertiesException e) {
             throw new IllegalArgumentException(String.format("Properties at %s are invalid: %s. If this is a context properties file, try to repair it.", path, e.getMessage()), e);
         }
@@ -46,15 +46,15 @@ public class Contexts {
     /**
      * Tries to load a context deduced from properties at the specified path. The path must point to the properties
      * file or to a directory directly containing the properties file at depth 1.
-     * This method only loads the source path and the snapshot home directory. Other properties are reset.
+     * This method only loads the source path and the snapshot home directory. Other properties are not read.
      */
-    public static Context repairAndLoad(Path path) {
+    public static Context loadMinimal(Path path) {
         Properties properties = findPlainProperties(path);
         ContextProperties contextProperties;
         try {
-            contextProperties = ContextProperties.readFrom(properties);
+            contextProperties = ContextProperties.read(properties);
         } catch (IllegalPropertiesException e) {
-            contextProperties = ContextProperties.readFromShallow(properties);
+            contextProperties = ContextProperties.readMinimal(properties);
         }
         return new Context(contextProperties);
     }
@@ -64,7 +64,7 @@ public class Contexts {
         if (Files.isRegularFile(path)) {
             pathToProperties = path;
         } else if (Files.isDirectory(path)) {
-            try (Stream<Path> pathStream = Files.find(path, 1, (p, bfa) -> bfa.isRegularFile() && p.getFileName().toString().equals(Context.CONTEXT_PROPERTIES_FILE_NAME))) {
+            try (Stream<Path> pathStream = Files.find(path, 1, (p, bfa) -> bfa.isRegularFile() && p.getFileName().toString().equals(ContextProperties.CONTEXT_PROPERTIES_FILE_NAME))) {
                pathToProperties = pathStream.findFirst().orElseThrow(() -> new IllegalArgumentException("Could not find context properties in " + path));
             } catch (IOException e) {
                 throw new UncheckedIOException("Could not find context properties in " + path, e);

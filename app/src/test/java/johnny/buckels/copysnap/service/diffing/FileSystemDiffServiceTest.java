@@ -1,23 +1,23 @@
-package johnny.buckels.copysnap.service;
+package johnny.buckels.copysnap.service.diffing;
 
 import johnny.buckels.copysnap.model.CheckpointChecksum;
 import johnny.buckels.copysnap.model.FileState;
 import johnny.buckels.copysnap.model.FileSystemState;
-import johnny.buckels.copysnap.service.diffing.FileSystemAccessor;
-import johnny.buckels.copysnap.service.diffing.FileSystemDiff;
-import johnny.buckels.copysnap.service.diffing.FileSystemDiffService;
+import johnny.buckels.copysnap.model.Root;
 import johnny.buckels.copysnap.service.diffing.copy.CopyAction;
 import johnny.buckels.copysnap.service.diffing.copy.PlainCopyAction;
 import johnny.buckels.copysnap.service.diffing.copy.SymbolicLinkCopyAction;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -36,10 +36,11 @@ public class FileSystemDiffServiceTest {
 
     private record TestFileSystemAccessor(
             Map<Path, Instant> lastModified,
-            Map<Path, CheckpointChecksum> checksums
+            Map<Path, CheckpointChecksum> checksums,
+            Map<Path, Stream<Path>> findPaths
     ) implements FileSystemAccessor {
 
-        @Override
+            @Override
             public Instant getLastModifiedTime(Path p) {
                 return Optional.ofNullable(lastModified.get(p)).orElseThrow();
             }
@@ -49,11 +50,37 @@ public class FileSystemDiffServiceTest {
                 return Optional.ofNullable(checksums.get(p)).map(expectedChecksum::equals).orElseThrow();
             }
 
+            @Override
+            public OutputStream createNewOutputStream(Path path) {
+                return OutputStream.nullOutputStream();
+            }
+
+            @Override
+            public InputStream createNewInputStream(Path path) {
+                return InputStream.nullInputStream();
+            }
+
+            @Override
+            public void createDirectories(Path path) {
+                // do nothing
+            }
+
+        @Override
+        public Stream<Path> findFiles(Path path) {
+            return findPaths.get(path);
         }
+
+        @Override
+        public void createSymbolicLink(Path absDestination, Path absSource) {
+            // do nothing
+        }
+
+    }
 
     @Test
     public void test_copyActions_plainCopy() {
-        Path rootNew = Path.of("/x/y/z");
+        Path sourceRootDirectory = Path.of("/x/y/z/r");
+        Root sourceRoot = Root.from(sourceRootDirectory);
         Path file = Path.of("r/a/b/c/f");
         Path rootOld = Path.of("/p/q/rold");
         Path destination = Path.of("/p/q/rnew");
@@ -71,29 +98,30 @@ public class FileSystemDiffServiceTest {
 
         // when
         TestFileSystemAccessor fsa = new TestFileSystemAccessor(
-                Map.of(rootNew.resolve(file), time.plusSeconds(1)),
-                Map.of(rootNew.resolve(file), hashNew)
+                Map.of(sourceRoot.rootDirLocation().resolve(file), time.plusSeconds(1)),
+                Map.of(sourceRoot.rootDirLocation().resolve(file), hashNew),
+                Map.of(sourceRoot.pathToRootDir(), Stream.of(sourceRoot.rootDirLocation().resolve(file)))
         );
 
         FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
-        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(rootNew, List.of(file), fssOld);
-        Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination);
+        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(sourceRoot, fssOld);
+        Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination).getActions();
 
         // then
         /*
             expectedCopyLocation: /p/q/rnew/r/a/b/c/f
             expectedCopySource: rootNew.resolve(file)
          */
-        CopyAction expectedAction = new PlainCopyAction(rootNew, destination, file);
+        CopyAction expectedAction = new PlainCopyAction(sourceRoot.rootDirLocation(), destination, file);
         assertEquals(Set.of(expectedAction), copyActions);
-        assertEquals(new FileSystemDiff.DiffCounts(0, 0, 1, 0, 0), fileSystemDiff.getCounts());
-
+        assertEquals(new FileSystemDiff.DiffCounts(0, 0, 1, 0, 0), fileSystemDiff.counts());
     }
 
 
     @Test
     public void test_copyActions_aliasCopy() {
-        Path rootNew = Path.of("/x/y/z");
+        Path sourceRootDir = Path.of("/x/y/z/r");
+        Root sourceRoot = Root.from(sourceRootDir);
         Path file = Path.of("r/a/b/c/f");
         Path rootOld = Path.of("/p/q/rold");
         Path destination = Path.of("/p/q/rnew");
@@ -111,12 +139,13 @@ public class FileSystemDiffServiceTest {
 
         // when
         TestFileSystemAccessor fsa = new TestFileSystemAccessor(
-                Map.of(rootNew.resolve(file), time.plusSeconds(1)),
-                Map.of(rootNew.resolve(file), hashNew)
+                Map.of(sourceRoot.rootDirLocation().resolve(file), time.plusSeconds(1)),
+                Map.of(sourceRoot.rootDirLocation().resolve(file), hashNew),
+                Map.of(sourceRoot.pathToRootDir(), Stream.of(sourceRoot.rootDirLocation().resolve(file)))
         );
         FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
-        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(rootNew, List.of(file), fssOld);
-        Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination);
+        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(sourceRoot, fssOld);
+        Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination).getActions();
 
         // then
         /*
@@ -125,7 +154,7 @@ public class FileSystemDiffServiceTest {
          */
         CopyAction expectedAction = new SymbolicLinkCopyAction(rootOld, destination, Path.of("r"));
         assertEquals(Set.of(expectedAction), copyActions);
-        assertEquals(new FileSystemDiff.DiffCounts(0, 0, 0, 1, 0), fileSystemDiff.getCounts());
+        assertEquals(new FileSystemDiff.DiffCounts(0, 0, 0, 1, 0), fileSystemDiff.counts());
 
     }
 
@@ -161,8 +190,10 @@ public class FileSystemDiffServiceTest {
      */
     @Test
     public void test_copyActions_aliasAndCopy() {
-        Path rootNew = Path.of("/x/y/z");
-        Path rootOld = Path.of("/p/q/rold");
+        Path sourceRootDir = Path.of("/x/y/z/r");
+        Root sourceRoot = Root.from(sourceRootDir);
+        Path rootDirOld = Path.of("/p/q/rold/r");
+        Root rootOld = Root.from(rootDirOld);
 
         Path fileChanged = Path.of("r/a/b/c/f");
         Path fileUnchanged = Path.of("r/a/v/w/F");
@@ -179,7 +210,7 @@ public class FileSystemDiffServiceTest {
         CheckpointChecksum hashOldUnchanged = checksum("9");
         FileState stateOldChanged = new FileState(fileChanged, time, hashOldChanged);
         FileState stateOldUnchanged = new FileState(fileUnchanged, time, hashOldUnchanged);
-        FileSystemState.Builder builderOld = FileSystemState.builder(rootOld);
+        FileSystemState.Builder builderOld = FileSystemState.builder(rootOld.rootDirLocation());
         builderOld.add(stateOldChanged);
         builderOld.add(stateOldUnchanged);
         FileSystemState fssOld = builderOld.build();
@@ -187,15 +218,18 @@ public class FileSystemDiffServiceTest {
         // when
         TestFileSystemAccessor fsa = new TestFileSystemAccessor(
                 Map.of(
-                        rootNew.resolve(fileChanged), time.plusSeconds(1),
-                        rootNew.resolve(fileUnchanged), time.plusSeconds(1)),
+                        sourceRoot.rootDirLocation().resolve(fileChanged), time.plusSeconds(1),
+                        sourceRoot.rootDirLocation().resolve(fileUnchanged), time.plusSeconds(1)),
                 Map.of(
-                        rootNew.resolve(fileChanged), hashNewChanged,
-                        rootNew.resolve(fileUnchanged), hashNewUnchanged)
+                        sourceRoot.rootDirLocation().resolve(fileChanged), hashNewChanged,
+                        sourceRoot.rootDirLocation().resolve(fileUnchanged), hashNewUnchanged),
+                Map.of(sourceRoot.pathToRootDir(), Stream.of(
+                        sourceRoot.rootDirLocation().resolve(fileChanged),
+                        sourceRoot.rootDirLocation().resolve(fileUnchanged)))
         );
         FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
-        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(rootNew, List.of(fileChanged, fileUnchanged), fssOld);
-        Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination);
+        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(sourceRoot, fssOld);
+        Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination).getActions();
 
         // then
         /*
@@ -203,14 +237,14 @@ public class FileSystemDiffServiceTest {
             expectedAliasTarget: /p/q/rold/r/a/v
             No file changed up to the uppermost unchanged directory, which is r/a/v.
          */
-        CopyAction expectedAliasAction = new SymbolicLinkCopyAction(rootOld, destination, Path.of("r/a/v"));
+        CopyAction expectedAliasAction = new SymbolicLinkCopyAction(rootOld.rootDirLocation(), destination, Path.of("r/a/v"));
         /*
             expectedCopySource: fileChanged
             expectedCopyLocation: /p/q/rnew/r/a/b/c/f
          */
-        CopyAction expectedCopyAction = new PlainCopyAction(rootNew, destination, fileChanged);
+        CopyAction expectedCopyAction = new PlainCopyAction(sourceRoot.rootDirLocation(), destination, fileChanged);
         assertEquals(Set.of(expectedAliasAction, expectedCopyAction), copyActions);
-        assertEquals(new FileSystemDiff.DiffCounts(0, 0, 1, 1, 0), fileSystemDiff.getCounts());
+        assertEquals(new FileSystemDiff.DiffCounts(0, 0, 1, 1, 0), fileSystemDiff.counts());
     }
 
 
@@ -235,7 +269,8 @@ public class FileSystemDiffServiceTest {
      */
     @Test
     public void test_copyAction_deleteOne_OneChanged_expectCopy() {
-        Path rootNew = Path.of("/x/y/z");
+        Path sourceRootDir = Path.of("/x/y/z/r");
+        Root sourceRoot = Root.from(sourceRootDir);
         Path rootOld = Path.of("/p/q/rold");
         Path destination = Path.of("/p/q/rnew");
 
@@ -257,21 +292,22 @@ public class FileSystemDiffServiceTest {
 
         // when
         TestFileSystemAccessor fsa = new TestFileSystemAccessor(
-                Map.of(rootNew.resolve(fileChanged), time.plusSeconds(1)),
-                Map.of(rootNew.resolve(fileChanged), hashNewChanged)
+                Map.of(sourceRoot.rootDirLocation().resolve(fileChanged), time.plusSeconds(1)),
+                Map.of(sourceRoot.rootDirLocation().resolve(fileChanged), hashNewChanged),
+                Map.of(sourceRoot.pathToRootDir(), Stream.of(sourceRoot.rootDirLocation().resolve(fileChanged)))
         );
         FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
-        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(rootNew, List.of(fileChanged), fssOld);
-        Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination);
+        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(sourceRoot, fssOld);
+        Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination).getActions();
 
         // then
         /*
             expectedCopySource: /x/y/z/tmp/d/file.txt
             expectedCopyTarget: /p/q/rnew/tmp/d/file.txt
          */
-        CopyAction expectedCopyAction = new PlainCopyAction(rootNew, destination, fileChanged);
+        CopyAction expectedCopyAction = new PlainCopyAction(sourceRoot.rootDirLocation(), destination, fileChanged);
         assertEquals(Set.of(expectedCopyAction), copyActions);
-        assertEquals(new FileSystemDiff.DiffCounts(0, 1, 1, 0, 0), fileSystemDiff.getCounts());
+        assertEquals(new FileSystemDiff.DiffCounts(0, 1, 1, 0, 0), fileSystemDiff.counts());
     }
 
 
@@ -298,14 +334,16 @@ public class FileSystemDiffServiceTest {
     public void test_copyAction_deleteOne_RemainingUnchanged_expectAliasCopyOnFiles() {
         Instant time = Instant.now();
 
-        Path rootNew = Path.of("/x/y/z");
-        Path rootOld = Path.of("/p/q/rold");
+        Path sourceRootDir = Path.of("/x/y/z/r");
+        Root sourceRoot = Root.from(sourceRootDir);
+        Path rootDirOld = Path.of("/p/q/rold/r");
+        Root rootOld = Root.from(rootDirOld);
         Path unchangedFile = Path.of("tmp/d/file.txt");
         Path noLongerPresentFileOld = Path.of("tmp/d/d2/fileOld.txt");
 
         CheckpointChecksum unchangedChecksum = checksum("new byte[] {1}");
 
-        FileSystemState.Builder builderOld = FileSystemState.builder(rootOld);
+        FileSystemState.Builder builderOld = FileSystemState.builder(rootOld.rootDirLocation());
         builderOld.add(new FileState(unchangedFile, time, unchangedChecksum));
         builderOld.add(new FileState(noLongerPresentFileOld, time, unchangedChecksum));
         FileSystemState fssOld = builderOld.build();
@@ -314,18 +352,19 @@ public class FileSystemDiffServiceTest {
 
         // when
         TestFileSystemAccessor fsa = new TestFileSystemAccessor(
-                Map.of(rootNew.resolve(unchangedFile), time.plusSeconds(1)),
-                Map.of(rootNew.resolve(unchangedFile), unchangedChecksum)
+                Map.of(sourceRoot.rootDirLocation().resolve(unchangedFile), time.plusSeconds(1)),
+                Map.of(sourceRoot.rootDirLocation().resolve(unchangedFile), unchangedChecksum),
+                Map.of(sourceRoot.pathToRootDir(), Stream.of(sourceRoot.rootDirLocation().resolve(unchangedFile)))
         );
         FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
-        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(rootNew, List.of(unchangedFile), fssOld);
-        Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination);
+        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(sourceRoot, fssOld);
+        Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination).getActions();
 
         // then
-        CopyAction expectedCopyAction = new SymbolicLinkCopyAction(rootOld, destination, unchangedFile);
+        CopyAction expectedCopyAction = new SymbolicLinkCopyAction(rootOld.rootDirLocation(), destination, unchangedFile);
 
         assertEquals(Set.of(expectedCopyAction), copyActions);
-        assertEquals(new FileSystemDiff.DiffCounts(0, 1, 0, 1, 0), fileSystemDiff.getCounts());
+        assertEquals(new FileSystemDiff.DiffCounts(0, 1, 0, 1, 0), fileSystemDiff.counts());
     }
 
     private CheckpointChecksum checksum(String stringContent) {
