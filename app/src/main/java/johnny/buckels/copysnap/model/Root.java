@@ -1,6 +1,5 @@
 package johnny.buckels.copysnap.model;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 
@@ -19,9 +18,6 @@ public record Root(Path pathToRootDir, Path rootDirLocation) {
         if (!path.isAbsolute()) {
             System.out.println("path = " + path);
             throw new IllegalArgumentException("Path to root dir must be absolute: " + path);
-        }
-        if (!Files.isDirectory(path)) {
-            throw new IllegalArgumentException("Path to root dir must point to a directory: " + path);
         }
         return new Root(path, Optional.ofNullable(path.getParent()).orElse(path));
     }

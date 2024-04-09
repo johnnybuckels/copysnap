@@ -1,9 +1,9 @@
 package johnny.buckels.copysnap.service.diffing.copy;
 
 import johnny.buckels.copysnap.model.FileState;
+import johnny.buckels.copysnap.service.diffing.FileSystemAccessor;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 
@@ -14,11 +14,11 @@ public class SymbolicLinkCopyAction extends AbstractCopyAction {
     }
 
     @Override
-    public Optional<FileState> perform() throws IOException {
+    public Optional<FileState> perform(FileSystemAccessor fsa) throws IOException {
         Path absSource = sourceRoot.resolve(relPath);
         Path absDestination = destinationRoot.resolve(relPath);
-        createParentDirs(absDestination);
-        Files.createSymbolicLink(absDestination, absSource);
+        createParentDirs(absDestination, fsa);
+        fsa.createSymbolicLink(absDestination, absSource);
         return Optional.empty();
     }
 

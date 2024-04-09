@@ -2,13 +2,13 @@ package johnny.buckels.copysnap.service.diffing.copy;
 
 import johnny.buckels.copysnap.model.CheckpointChecksum;
 import johnny.buckels.copysnap.model.FileState;
+import johnny.buckels.copysnap.service.diffing.FileSystemAccessor;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.Optional;
 
@@ -19,16 +19,16 @@ public class PlainCopyAction extends AbstractCopyAction {
     }
 
     @Override
-    public Optional<FileState> perform() throws IOException {
+    public Optional<FileState> perform(FileSystemAccessor fsa) throws IOException {
         CheckpointChecksum checksum;
         Instant lastModified;
         Path absSource = sourceRoot.resolve(relPath);
         Path absDestination = destinationRoot.resolve(relPath);
 
-        createParentDirs(absDestination);
+        createParentDirs(absDestination, fsa);
         try (
-                InputStream is = Files.newInputStream(absSource);
-                OutputStream os = Files.newOutputStream(absDestination, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW)
+                InputStream is = fsa.createNewInputStream(absSource);
+                OutputStream os = fsa.createNewOutputStream(absDestination)
         ) {
             checksum = CheckpointChecksum.byTransferring(is, os);
             lastModified = Files.getLastModifiedTime(absSource).toInstant();
