@@ -44,7 +44,7 @@ public class FileSystemStateTest {
 
         // when ser + de
         Path tempFile = Files.createTempFile(TMP_FILE_PATH, "tmpfile" + System.currentTimeMillis(), ".tmp");
-        fst.write(Files.newBufferedWriter(tempFile));
+        fst.write(Files.newOutputStream(tempFile));
         long serEnd = System.currentTimeMillis();
         FileSystemState deserializedFst = FileSystemState.read(Files.newInputStream(tempFile));
         long deEnd = System.currentTimeMillis();

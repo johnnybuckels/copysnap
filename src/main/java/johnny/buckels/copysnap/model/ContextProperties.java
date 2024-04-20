@@ -1,9 +1,6 @@
 package johnny.buckels.copysnap.model;
 
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.UncheckedIOException;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
@@ -87,8 +84,8 @@ record ContextProperties(
         }
         if (latestState != null) {
             Path latestStateFile = snapshotsHomeDir.resolve(LATEST_FILE_STATE_FILE_NAME);
-            try (BufferedWriter bw = Files.newBufferedWriter(latestStateFile, CREATE_OVERWRITE_OPEN_OPTIONS)) {
-                latestState.write(bw);
+            try (OutputStream os = Files.newOutputStream(latestStateFile, CREATE_OVERWRITE_OPEN_OPTIONS)) {
+                latestState.write(os);
             } catch (IOException e) {
                 throw new UncheckedIOException("Could not write latest file states to %s: %s".formatted(latestStateFile, e.getMessage()), e);
             }

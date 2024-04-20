@@ -1,8 +1,6 @@
 package johnny.buckels.copysnap.model;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.Writer;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -126,8 +124,8 @@ public record FileSystemState(Info info, Map<Path, FileState> statesByPath) {
      * checksum;modified;path\NUL\n
      * </p>
      */
-    // TODO. Change to use OutputStream and create Writer in this method.
-    public void write(Writer writer) throws IOException {
+    public void write(OutputStream os) throws IOException {
+        OutputStreamWriter writer = new OutputStreamWriter(os);
         writeLine(writer, info.rootLocation().toString());
         writeLine(writer, info.created().format(DATE_TIME_FORMATTER));
         for (FileState fileState : statesByPath.values()) {
