@@ -11,36 +11,25 @@ import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.Set;
 
-/**
- *                                 FileSystem                        CopySnapCopies
- * newSystemRootLocation    ---->  ...                              ...
- * newSystemRoot            ---->      |- Root                          |- 2024-02-23    <---- oldSystemRootLocation
- *                                        |-...                            |- Root       <---- oldSystemRoot
- *                                        |-...                                |-...
- *                                                                             |-...
- *                                                                     |- 2024-04-04     <---- destination
- *                                                                         |- (about to copy here...)
- * newSystemRootLocation: The directory where the root path of the current filesystem is located in.
- * oldSystemRootLocation: The directory where the root path of the last filesystem-snapshot is located in.
- * destination: The directory where the copy of the filesystem should reside in.
- */
+
 public record FileSystemDiff(
         Root sourceRoot,
-        FileSystemState remainingOldStates,
+        FileSystemState stillExistingFiles,
         FileSystemNode diffTree,
         DiffCounts counts
 ) {
+
     /**
      * @param destination the directory where the copy of the filesystem should reside in.
      */
-    public Actions computeCopyActions(Path destination) {
+    public Actions computeCopyActions(Path destination, Path oldRootLocation) {
         Set<CopyAction> copyActions = new HashSet<>();
         for (FileSystemNode file : diffTree.getLeafs()) {
             if (file.isChanged()) {
                 copyActions.add(new PlainCopyAction(sourceRoot.rootDirLocation(), destination, file.getPath()));
             } else {
                 Path upperMostUnchanged = file.getUppermostUnchanged().getPath();
-                copyActions.add(new SymbolicLinkCopyAction(remainingOldStates.info().rootLocation(), destination, upperMostUnchanged));
+                copyActions.add(new SymbolicLinkCopyAction(oldRootLocation, destination, upperMostUnchanged));
             }
         }
         return new Actions(copyActions);
@@ -58,12 +47,11 @@ public record FileSystemDiff(
 
         // TODO: logging
         /**
-         *
          * @return The new file system state.
          */
         public FileSystemState apply(FileSystemAccessor fsa) {
 //        int performedCount = 0;
-            FileSystemState.Builder newStateBuilder = FileSystemState.builder(remainingOldStates);
+            FileSystemState.Builder newStateBuilder = FileSystemState.builder(stillExistingFiles);
             for (CopyAction copyAction : copyActions) {
                 try {
                     copyAction.perform(fsa)

@@ -92,7 +92,7 @@ public class FileSystemDiffServiceTest {
         // and given: old file state
         CheckpointChecksum hashOld = checksum("oldHash");
         FileState stateOld = new FileState(file, time, hashOld);
-        FileSystemState.Builder builderOld = FileSystemState.builder(rootOld);
+        FileSystemState.Builder builderOld = FileSystemState.builder();
         builderOld.add(stateOld);
         FileSystemState fssOld = builderOld.build();
 
@@ -105,7 +105,7 @@ public class FileSystemDiffServiceTest {
 
         FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
         FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(sourceRoot, fssOld);
-        Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination).getActions();
+        Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination, rootOld).getActions();
 
         // then
         /*
@@ -133,7 +133,7 @@ public class FileSystemDiffServiceTest {
         // and given: old file state
         CheckpointChecksum hashOld = checksum("{0}");
         FileState stateOld = new FileState(file, time, hashOld);
-        FileSystemState.Builder builderOld = FileSystemState.builder(rootOld);
+        FileSystemState.Builder builderOld = FileSystemState.builder();
         builderOld.add(stateOld);
         FileSystemState fssOld = builderOld.build();
 
@@ -145,7 +145,7 @@ public class FileSystemDiffServiceTest {
         );
         FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
         FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(sourceRoot, fssOld);
-        Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination).getActions();
+        Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination, rootOld).getActions();
 
         // then
         /*
@@ -210,7 +210,7 @@ public class FileSystemDiffServiceTest {
         CheckpointChecksum hashOldUnchanged = checksum("9");
         FileState stateOldChanged = new FileState(fileChanged, time, hashOldChanged);
         FileState stateOldUnchanged = new FileState(fileUnchanged, time, hashOldUnchanged);
-        FileSystemState.Builder builderOld = FileSystemState.builder(rootOld.rootDirLocation());
+        FileSystemState.Builder builderOld = FileSystemState.builder();
         builderOld.add(stateOldChanged);
         builderOld.add(stateOldUnchanged);
         FileSystemState fssOld = builderOld.build();
@@ -229,7 +229,7 @@ public class FileSystemDiffServiceTest {
         );
         FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
         FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(sourceRoot, fssOld);
-        Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination).getActions();
+        Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination, rootOld.rootDirLocation()).getActions();
 
         // then
         /*
@@ -285,7 +285,7 @@ public class FileSystemDiffServiceTest {
         // and given: old file state
         FileState hashFileOld = new FileState(fileOld, time, checksum("new byte[] {0}"));
         FileState hashFileChanged = new FileState(fileChanged, time, checksum("new byte[] {0}"));
-        FileSystemState.Builder builderOld = FileSystemState.builder(rootOld);
+        FileSystemState.Builder builderOld = FileSystemState.builder();
         builderOld.add(hashFileOld);
         builderOld.add(hashFileChanged);
         FileSystemState fssOld = builderOld.build();
@@ -298,7 +298,7 @@ public class FileSystemDiffServiceTest {
         );
         FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
         FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(sourceRoot, fssOld);
-        Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination).getActions();
+        Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination, rootOld).getActions();
 
         // then
         /*
@@ -343,7 +343,7 @@ public class FileSystemDiffServiceTest {
 
         CheckpointChecksum unchangedChecksum = checksum("new byte[] {1}");
 
-        FileSystemState.Builder builderOld = FileSystemState.builder(rootOld.rootDirLocation());
+        FileSystemState.Builder builderOld = FileSystemState.builder();
         builderOld.add(new FileState(unchangedFile, time, unchangedChecksum));
         builderOld.add(new FileState(noLongerPresentFileOld, time, unchangedChecksum));
         FileSystemState fssOld = builderOld.build();
@@ -358,7 +358,7 @@ public class FileSystemDiffServiceTest {
         );
         FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
         FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(sourceRoot, fssOld);
-        Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination).getActions();
+        Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination, rootOld.rootDirLocation()).getActions();
 
         // then
         CopyAction expectedCopyAction = new SymbolicLinkCopyAction(rootOld.rootDirLocation(), destination, unchangedFile);

@@ -18,7 +18,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class FileSystemStateTest {
 
     private static final int HASH_SIZE = 16;
-    private static final int MAX_PATH_LENGTH = 8;
     private static final Random RNG = new Random();
 
     // TODO: Change to actual tmp folder when testing of tests is done
@@ -36,9 +35,8 @@ public class FileSystemStateTest {
 
         // given
         long start = System.currentTimeMillis();
-        Path root = Path.of("/root/path");
-        FileSystemState.Builder builder = FileSystemState.builder(root);
-        IntStream.range(0, fileCount).forEach(i -> builder.add(generateRandomFileState(15)));
+        FileSystemState.Builder builder = FileSystemState.builder();
+        IntStream.range(0, fileCount).forEach(i -> builder.add(generateRandomFileState()));
         FileSystemState fst = builder.build();
         long initEnd = System.currentTimeMillis();
 
@@ -50,27 +48,18 @@ public class FileSystemStateTest {
         long deEnd = System.currentTimeMillis();
 
         // then
-
         System.out.println("File count: " + fileCount);
         System.out.println("Init: " + (initEnd - start) / 1000.0);
         System.out.println("Ser: " + (serEnd - initEnd) / 1000.0);
         System.out.println("De: " + (deEnd - serEnd) / 1000.0);
-        assertEquals(fst.info().rootLocation(), deserializedFst.info().rootLocation());
-        assertEquals(fst.getStatesView(), deserializedFst.getStatesView());
+        assertEquals(fst.paths(), deserializedFst.paths());
     }
 
-    /**
-     * File state with root "/".
-     */
     private FileState generateRandomFileState() {
-        return generateRandomFileState(RNG.nextInt(MAX_PATH_LENGTH));
-    }
-
-    private FileState generateRandomFileState(int randomPartLength) {
         byte[] bytes = new byte[HASH_SIZE];
         RNG.nextBytes(bytes);
         // 97 = 'a', 122 = 'z'
-        Path p = getRandomRelativePath(randomPartLength);
+        Path p = getRandomRelativePath();
         CheckpointChecksum checkpointChecksum = CheckpointChecksum.from(new ByteArrayInputStream(bytes));
         return new FileState(p, Instant.now(), checkpointChecksum);
     }
@@ -78,10 +67,10 @@ public class FileSystemStateTest {
     /**
      * @return Path.of("g/a/c/a/a/h/i/").
      */
-    private Path getRandomRelativePath(int length) {
+    private Path getRandomRelativePath() {
         String[] randomParts = Stream.concat(
                         RNG.ints(97, 123)
-                                .limit(length)
+                                .limit(15)
                                 .mapToObj(Character::toChars)
                                 .map(String::new),
                         Stream.of(UUID.randomUUID().toString()))

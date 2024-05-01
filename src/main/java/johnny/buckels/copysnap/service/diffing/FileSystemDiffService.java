@@ -28,7 +28,8 @@ public class FileSystemDiffService extends AbstractMessageProducer {
 
     /**
      * This method accesses the file system.
-     * @param sourceRoot The root object to take a snapshot from.
+     *
+     * @param sourceRoot         The root object to take a snapshot from.
      */
     public FileSystemDiff computeDiff(Root sourceRoot, FileSystemState oldSystemState) {
         AtomicInteger newCount = new AtomicInteger();
@@ -67,11 +68,11 @@ public class FileSystemDiffService extends AbstractMessageProducer {
         // determine no longer present files and mark former containing directories as changed
         FileSystemState remainingStates = oldSystemState.newByRemovingMissing(processedNewFiles);
         FileSystemState removedStates = oldSystemState.newBySetMinus(remainingStates);
-        for (Path noLongerPresentPaths : removedStates.statesByPath().keySet()) {
-            systemDiffTree.getDeepestKnownAlong(noLongerPresentPaths).markAsChanged();
+        for (Path noLongerPresentPath : removedStates.paths()) {
+            systemDiffTree.getDeepestKnownAlong(noLongerPresentPath).markAsChanged();
         }
 
-        int removedCount = removedStates.info().itemCount();
+        int removedCount = removedStates.fileCount();
         messageConsumer.consumeMessage(Message.info("New: %s, Changed: %s, Removed: %s, Unchanged: %s, Errors: %s",
                 newCount, changedCount, removedCount, unchangedCount, errorCount));
         return new FileSystemDiff(

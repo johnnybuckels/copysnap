@@ -25,7 +25,7 @@ public class Contexts {
         if (Files.isDirectory(snapshotsHomeDir))
             throw new IllegalStateException("Context already exists: " + snapshotsHomeDir);
         ContextProperties properties = ContextProperties.getNew(sourceDir, snapshotsHomeDir);
-        return new Context(properties);
+        return new Context(properties, null);
     }
 
     /**
@@ -33,41 +33,25 @@ public class Contexts {
      * file or to a directory directly containing the properties file at depth 1.
      */
     public static Context load(Path path) {
-        Properties properties = findPlainProperties(path);
-        ContextProperties contextProperties;
+        Properties properties;
         try {
-            contextProperties = ContextProperties.read(properties);
-        } catch (IllegalPropertiesException e) {
-            throw new IllegalArgumentException(String.format("Properties at %s are invalid: %s. If this is a context properties file, try to repair it.", path, e.getMessage()), e);
+            properties = findAndReadPlainProperties(path);
+        } catch (ContextIOException e) {
+            throw new UncheckedIOException("Could not load plain properties at %s: %s".formatted(path, e.getMessage()), e);
         }
-        return new Context(contextProperties);
+        ContextProperties contextProperties = ContextProperties.fromProperties(properties);
+        return new Context(contextProperties, null);
     }
 
-    /**
-     * Tries to load a context deduced from properties at the specified path. The path must point to the properties
-     * file or to a directory directly containing the properties file at depth 1.
-     * This method only loads the source path and the snapshot home directory. Other properties are not read.
-     */
-    public static Context loadMinimal(Path path) {
-        Properties properties = findPlainProperties(path);
-        ContextProperties contextProperties;
-        try {
-            contextProperties = ContextProperties.read(properties);
-        } catch (IllegalPropertiesException e) {
-            contextProperties = ContextProperties.readMinimal(properties);
-        }
-        return new Context(contextProperties);
-    }
-
-    private static Properties findPlainProperties(Path path) {
+    private static Properties findAndReadPlainProperties(Path path) throws ContextIOException {
         Path pathToProperties;
         if (Files.isRegularFile(path)) {
             pathToProperties = path;
         } else if (Files.isDirectory(path)) {
-            try (Stream<Path> pathStream = Files.find(path, 1, (p, bfa) -> bfa.isRegularFile() && p.getFileName().toString().equals(ContextProperties.CONTEXT_PROPERTIES_FILE_NAME))) {
+            try (Stream<Path> pathStream = Files.find(path, 1, (p, bfa) -> bfa.isRegularFile() && p.getFileName().toString().equals(Context.CONTEXT_PROPERTIES_FILE_NAME))) {
                pathToProperties = pathStream.findFirst().orElseThrow(() -> new IllegalArgumentException("Could not find context properties in " + path));
             } catch (IOException e) {
-                throw new UncheckedIOException("Could not find context properties in " + path, e);
+                throw new ContextIOException("Could not find context properties in " + path, e);
             }
         } else {
             throw new IllegalArgumentException("Not a file or directory: " + path);
@@ -76,7 +60,7 @@ public class Contexts {
         try (BufferedReader br = Files.newBufferedReader(pathToProperties)) {
             properties.load(br);
         } catch (IOException e) {
-            throw new UncheckedIOException("Could not load properties from " + pathToProperties, e);
+            throw new ContextIOException("Could not load properties from " + pathToProperties, e);
         }
         return properties;
     }

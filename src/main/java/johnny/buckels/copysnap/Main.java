@@ -7,6 +7,7 @@ import io.github.johannesbuchholz.clihats.processor.annotations.Command;
 import io.github.johannesbuchholz.clihats.processor.annotations.CommandLineInterface;
 import io.github.johannesbuchholz.clihats.processor.execution.CliHats;
 import johnny.buckels.copysnap.model.Context;
+import johnny.buckels.copysnap.model.ContextIOException;
 import johnny.buckels.copysnap.model.Contexts;
 import johnny.buckels.copysnap.service.logging.ConcurrentMessageConsumer;
 import johnny.buckels.copysnap.service.logging.Message;
@@ -65,9 +66,13 @@ public class Main {
         Path cwd = Path.of(System.getProperty("user.dir"));
         Path sourceDirResolved = resolvePathToCwd(source);
         Context context = Contexts.createNew(sourceDirResolved, cwd);
+        try {
+            context.write();
+        } catch (ContextIOException e) {
+            throw new UncheckedIOException("Could not create new context: " + e.getMessage(), e);
+        }
 
-        setCurrentContextInAppProperties(context.writeAndGet().getContextHome());
-
+        setAsCurrentContextInAppProperties(context);
         MESSAGE_CONSUMER.consumeMessage(Message.info("Initialised context"));
         MESSAGE_CONSUMER.consumeMessage(Message.info(context.toDisplayString()));
     }
@@ -81,10 +86,9 @@ public class Main {
             @Argument(necessity = REQUIRED, type = OPERAND) Path path
     ) {
         Path searchPathResolved = resolvePathToCwd(path);
-        Context context = Contexts.load(searchPathResolved);
+        Context context= Contexts.load(searchPathResolved);
 
-        setCurrentContextInAppProperties(context.getContextHome());
-
+        setAsCurrentContextInAppProperties(context);
         MESSAGE_CONSUMER.consumeMessage(Message.info("Loaded context"));
         MESSAGE_CONSUMER.consumeMessage(Message.info(context.toDisplayString()));
     }
@@ -120,26 +124,13 @@ public class Main {
         }
         Context context = contextOpt.get();
 //                .withMessageConsumer(quiet ? MessageConsumer.quiet() : MESSAGE_CONSUMER);
-        context.createSnapshot();
-    }
-
-    /**
-     * Loads only essential parameters from the properties at the specified path. Other parameters are reset.
-     * This method call should be followed up by 'recompute' as this method removes the latest file system state.
-     * This is useful for resolving compatibility issues between versions of context.properties files and CopySnap.
-     * @param path The path to the home directory of a context or its properties file.
-     */
-    @Command
-    public static void repair(
-            @Argument(necessity = REQUIRED, type = OPERAND) Path path
-    ) {
-        Path resolvePath = resolvePathToCwd(path);
-        Context minimalContext = Contexts.loadMinimal(resolvePath);
-
-        setCurrentContextInAppProperties(minimalContext.writeAndGet().getContextHome());
-
-        MESSAGE_CONSUMER.consumeMessage(Message.info("Repaired context."));
-        MESSAGE_CONSUMER.consumeMessage(Message.info(minimalContext.toDisplayString()));
+        try {
+            context.loadLatestSnapshot()
+                    .createSnapshot()
+                    .write();
+        } catch (ContextIOException e) {
+            throw new UncheckedIOException("Could not create snapshot: " + e.getMessage(), e);
+        }
     }
 
     /**
@@ -164,7 +155,12 @@ public class Main {
         if (!resolvedPath.startsWith(context.getContextHome())) {
             MESSAGE_CONSUMER.consumeMessage(Message.error("Can not compute file state outside of home path %s: %s".formatted(context.getContextHome(), resolvedPath)));
         }
-        context.recomputeFileSystemState(resolvedPath);
+        try {
+            context.recomputeFileSystemState(resolvedPath)
+                    .write();
+        } catch (ContextIOException e) {
+            throw new UncheckedIOException("Could not recompute file system state: " + e.getMessage(), e);
+        }
     }
 
     private static Optional<Context> getLatestLoadedContext() {
@@ -200,8 +196,8 @@ public class Main {
         return properties;
     }
 
-    private static void setCurrentContextInAppProperties(Path contextPath) {
-        APP_PROPERTIES.put(CURRENT_CONTEXT_PROPERTY_NAME, contextPath.toString());
+    private static void setAsCurrentContextInAppProperties(Context context) {
+        APP_PROPERTIES.put(CURRENT_CONTEXT_PROPERTY_NAME, context.getContextHome().toString());
         try {
             writeAppProperties();
         } catch (IOException e) {
