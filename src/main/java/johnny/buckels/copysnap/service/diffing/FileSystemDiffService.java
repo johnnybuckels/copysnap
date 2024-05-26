@@ -3,20 +3,22 @@ package johnny.buckels.copysnap.service.diffing;
 import johnny.buckels.copysnap.model.FileState;
 import johnny.buckels.copysnap.model.FileSystemState;
 import johnny.buckels.copysnap.model.Root;
-import johnny.buckels.copysnap.service.logging.AbstractMessageProducer;
-import johnny.buckels.copysnap.service.logging.Message;
+import johnny.buckels.copysnap.service.logging.AbstractLogProducer;
+import johnny.buckels.copysnap.service.logging.Level;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
-public class FileSystemDiffService extends AbstractMessageProducer {
+public class FileSystemDiffService extends AbstractLogProducer {
 
     private final FileSystemAccessor fileSystemAccessor;
 
@@ -29,15 +31,18 @@ public class FileSystemDiffService extends AbstractMessageProducer {
     /**
      * This method accesses the file system.
      *
-     * @param sourceRoot         The root object to take a snapshot from.
+     * @param sourceRoot The root object to take a snapshot from.
      */
-    public FileSystemDiff computeDiff(Root sourceRoot, FileSystemState oldSystemState) {
+    public FileSystemDiff computeDiff(Root sourceRoot, FileSystemState oldSystemState) throws IOException {
         AtomicInteger newCount = new AtomicInteger();
         AtomicInteger changedCount = new AtomicInteger();
         AtomicInteger unchangedCount = new AtomicInteger();
         AtomicInteger errorCount = new AtomicInteger();
         Set<Path> processedNewFiles = new HashSet<>();
         FileSystemNode systemDiffTree = FileSystemNode.getNew();
+
+        ZonedDateTime start = ZonedDateTime.now();
+        log(Level.INFO, "Computing file differences - started: %s, at: %s)".formatted(start.toLocalDateTime().truncatedTo(ChronoUnit.SECONDS), sourceRoot.pathToRootDir()));
         try (Stream<Path> paths = fileSystemAccessor.findFiles(sourceRoot.pathToRootDir())) {
             paths
                 .map(p -> sourceRoot.rootDirLocation().relativize(p))
@@ -61,8 +66,6 @@ public class FileSystemDiffService extends AbstractMessageProducer {
                     }
                     processedNewFiles.add(currentNewPath);
                 });
-        } catch (IOException e) {
-            throw new UncheckedIOException("Could not iterate over directory contents at " + sourceRoot + ": " + e.getMessage(), e);
         }
 
         // determine no longer present files and mark former containing directories as changed
@@ -73,8 +76,9 @@ public class FileSystemDiffService extends AbstractMessageProducer {
         }
 
         int removedCount = removedStates.fileCount();
-        messageConsumer.consumeMessage(Message.info("New: %s, Changed: %s, Removed: %s, Unchanged: %s, Errors: %s",
-                newCount, changedCount, removedCount, unchangedCount, errorCount));
+        log(Level.INFO, "File differences: %s new, %s changed, %s removed, %s unchanged, %s erroneous"
+                .formatted(newCount, changedCount, removedCount, unchangedCount, errorCount));
+        log(Level.INFO, "Done computing file differences (%s ms)".formatted(Duration.between(start, ZonedDateTime.now()).toMillis()));
         return new FileSystemDiff(
                 sourceRoot,
                 remainingStates,
@@ -89,7 +93,9 @@ public class FileSystemDiffService extends AbstractMessageProducer {
         try {
             newLastModified = fileSystemAccessor.getLastModifiedTime(newAbsFilePath);
         } catch (IOException e) {
-            messageConsumer.consumeMessage(Message.error("Could not determine last modified time at %s: %s", newAbsFilePath, e.getMessage()), e);
+            String errorMsg = "Could not determine last modified time at %s: %s".formatted(newAbsFilePath, e.getMessage());
+            log(Level.ERROR, errorMsg);
+            logStacktrace(Level.DEBUG, e);
             return FileChangeState.ERROR;
         }
         Optional<FileState> lastCapturedState = oldSystemState.get(newRelFilePath);
@@ -100,17 +106,22 @@ public class FileSystemDiffService extends AbstractMessageProducer {
                 try {
                     hasChecksumChanged = !fileSystemAccessor.areChecksumsEqual(oldFileState.getChecksum(), newAbsFilePath);
                 } catch (IOException e) {
-                    messageConsumer.consumeMessage(Message.error("Could not determine hash at %s: %s", newAbsFilePath, e.getMessage()), e);
+                    String errorMsg = "Could not determine hash at %s: %s".formatted(newAbsFilePath, e.getMessage());
+                    log(Level.ERROR, errorMsg);
+                    logStacktrace(Level.DEBUG, e);
                     return FileChangeState.ERROR;
                 }
                 if (hasChecksumChanged) {
+                    log(Level.DEBUG, FileChangeState.CHANGED + ": " + newAbsFilePath);
                     return FileChangeState.CHANGED;
                 }
             }
             // we assume that newModified less or equal oldModified indicates an unchanged file
         } else {
+            log(Level.DEBUG, FileChangeState.NEW + ": " + newAbsFilePath);
             return FileChangeState.NEW;
         }
+        log(Level.DEBUG, FileChangeState.UNCHANGED + ": " + newAbsFilePath);
         return FileChangeState.UNCHANGED;
     }
 

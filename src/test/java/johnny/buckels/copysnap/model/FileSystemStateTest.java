@@ -1,6 +1,7 @@
 package johnny.buckels.copysnap.model;
 
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -30,6 +31,7 @@ public class FileSystemStateTest {
     }
 
     @Test
+    @Disabled("Only for manual performance test")
     public void serde() throws IOException {
         int fileCount = 10_000;
 

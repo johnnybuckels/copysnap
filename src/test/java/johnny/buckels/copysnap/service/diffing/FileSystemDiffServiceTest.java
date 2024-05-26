@@ -10,6 +10,7 @@ import johnny.buckels.copysnap.service.diffing.copy.SymbolicLinkCopyAction;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Path;
@@ -78,7 +79,7 @@ public class FileSystemDiffServiceTest {
     }
 
     @Test
-    public void test_copyActions_plainCopy() {
+    public void test_copyActions_plainCopy() throws IOException {
         Path sourceRootDirectory = Path.of("/x/y/z/r");
         Root sourceRoot = Root.from(sourceRootDirectory);
         Path file = Path.of("r/a/b/c/f");
@@ -119,7 +120,7 @@ public class FileSystemDiffServiceTest {
 
 
     @Test
-    public void test_copyActions_aliasCopy() {
+    public void test_copyActions_aliasCopy() throws IOException {
         Path sourceRootDir = Path.of("/x/y/z/r");
         Root sourceRoot = Root.from(sourceRootDir);
         Path file = Path.of("r/a/b/c/f");
@@ -189,7 +190,7 @@ public class FileSystemDiffServiceTest {
      *              v/      (alias to /p/q/rold/r/a/v)
      */
     @Test
-    public void test_copyActions_aliasAndCopy() {
+    public void test_copyActions_aliasAndCopy() throws IOException {
         Path sourceRootDir = Path.of("/x/y/z/r");
         Root sourceRoot = Root.from(sourceRootDir);
         Path rootDirOld = Path.of("/p/q/rold/r");
@@ -268,7 +269,7 @@ public class FileSystemDiffServiceTest {
      *          file.txt (direct copy)
      */
     @Test
-    public void test_copyAction_deleteOne_OneChanged_expectCopy() {
+    public void test_copyAction_deleteOne_OneChanged_expectCopy() throws IOException {
         Path sourceRootDir = Path.of("/x/y/z/r");
         Root sourceRoot = Root.from(sourceRootDir);
         Path rootOld = Path.of("/p/q/rold");
@@ -331,7 +332,7 @@ public class FileSystemDiffServiceTest {
      *          file.txt (symlink)
      */
     @Test
-    public void test_copyAction_deleteOne_RemainingUnchanged_expectAliasCopyOnFiles() {
+    public void test_copyAction_deleteOne_RemainingUnchanged_expectAliasCopyOnFiles() throws IOException {
         Instant time = Instant.now();
 
         Path sourceRootDir = Path.of("/x/y/z/r");

@@ -1,9 +1,15 @@
 package johnny.buckels.copysnap.service.logging;
 
+import java.io.PrintStream;
+
 public class ProgressConsolePrinter {
 
-    private static final String FORMAT = "\r%s [%s%s] %d/%d \u001B[33m%2.0f%%\u001B[0m \u001B[33m\u001B[0m";
-//            .formatted("Progress:", "█".repeat(i), "-".repeat(100 - i), 1/100 * (float)100, "Complete");
+    private static final PrintStream OUT = System.out;
+
+    private static String computeFormatString(int completed, int total) {
+        int maxDigitCount = Math.max(1, (int) Math.ceil(Math.log10(Integer.max(completed, total))));
+        return "\r%s [%s%s] %" + maxDigitCount + "d/%d (%3.0f%%)";
+    }
 
     private final String prefix;
 
@@ -11,9 +17,15 @@ public class ProgressConsolePrinter {
         this.prefix = prefix;
     }
 
-    public void write(int completed, int total) {
+    /**
+     * PREFIX [#########################---------------------------------------------------------------------------]  64/250 ( 26%)
+     */
+    public void update(int completed, int total) {
         double percentage = (double)completed/total * 100;
-        System.out.printf(FORMAT, prefix, "#".repeat((int) percentage), "-".repeat(100 - (int) percentage), completed, total, percentage);
+        OUT.printf(computeFormatString(completed, total), prefix, "#".repeat((int) percentage), "-".repeat(100 - (int) percentage), completed, total, percentage);
     }
 
+    public void newLine() {
+        OUT.println();
+    }
 }

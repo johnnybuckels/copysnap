@@ -9,9 +9,8 @@ import io.github.johannesbuchholz.clihats.processor.execution.CliHats;
 import johnny.buckels.copysnap.model.Context;
 import johnny.buckels.copysnap.model.ContextIOException;
 import johnny.buckels.copysnap.model.Contexts;
-import johnny.buckels.copysnap.service.logging.ConcurrentMessageConsumer;
-import johnny.buckels.copysnap.service.logging.Message;
-import johnny.buckels.copysnap.service.logging.MessageConsumer;
+import johnny.buckels.copysnap.service.logging.ConsolePrintingLogConsumer;
+import johnny.buckels.copysnap.service.logging.Level;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -34,25 +33,21 @@ public class Main {
     private static final String COPYSNAP_APP_NAME = ".copysnap";
     private static final String COPYSNAP_PROPERTIES_FILENAME = "copysnap.properties";
     private static final Path COPYSNAP_HOME_DIR=  Path.of(System.getProperty("user.home")).resolve(COPYSNAP_APP_NAME);
-    private static final Path COPYSNAP_APP_PROPERTIES = COPYSNAP_HOME_DIR.resolve(COPYSNAP_PROPERTIES_FILENAME);
+    private static final Path COPYSNAP_APP_PROPERTIES_PATH = COPYSNAP_HOME_DIR.resolve(COPYSNAP_PROPERTIES_FILENAME);
     
     private static final String CURRENT_CONTEXT_PROPERTY_NAME = "contexts.current";
     private static final Properties APP_PROPERTIES = getAppProperties();
 
-    private static final MessageConsumer MESSAGE_CONSUMER = newMessageConsumer();
+    private static final ConsolePrintingLogConsumer CONSOLE_PRINTER = new ConsolePrintingLogConsumer(Level.INFO);
 
     public static void main(String[] args) {
-        ZonedDateTime start = ZonedDateTime.now();
         try {
             CliHats.get(Main.class).executeWithThrows(args);
         } catch (CliHelpCallException e) {
-            MESSAGE_CONSUMER.consumeMessage(Message.info(e.getMessage()));
+            CONSOLE_PRINTER.consume(Level.INFO, e.getMessage());
         } catch (CliException e) {
-            MESSAGE_CONSUMER.consumeMessage(Message.error(e.getMessage()));
+            CONSOLE_PRINTER.consume(Level.ERROR, e);
         }
-        MESSAGE_CONSUMER.newLine();
-        MESSAGE_CONSUMER.consumeMessage(Message.info("Executing CopySnap command took %s ms", Duration.between(start, ZonedDateTime.now()).toMillis()));
-        MESSAGE_CONSUMER.close();
     }
 
     /**
@@ -73,8 +68,8 @@ public class Main {
         }
 
         setAsCurrentContextInAppProperties(context);
-        MESSAGE_CONSUMER.consumeMessage(Message.info("Initialised context"));
-        MESSAGE_CONSUMER.consumeMessage(Message.info(context.toDisplayString()));
+        CONSOLE_PRINTER.consume(Level.INFO, "Initialised context at " + context.getContextHome());
+        status();
     }
 
     /**
@@ -89,8 +84,8 @@ public class Main {
         Context context= Contexts.load(searchPathResolved);
 
         setAsCurrentContextInAppProperties(context);
-        MESSAGE_CONSUMER.consumeMessage(Message.info("Loaded context"));
-        MESSAGE_CONSUMER.consumeMessage(Message.info(context.toDisplayString()));
+        CONSOLE_PRINTER.consume(Level.INFO, "Loaded context " + context.getContextHome());
+        status();
     }
 
     /**
@@ -100,30 +95,26 @@ public class Main {
     public static void status() {
         Optional<Context> contextOpt = getLatestLoadedContext();
         if (contextOpt.isEmpty()) {
-            MESSAGE_CONSUMER.consumeMessage(Message.info("No context loaded."));
+            CONSOLE_PRINTER.consume(Level.INFO, "No context loaded.");
             return;
         }
         Context context = contextOpt.get();
-        MESSAGE_CONSUMER.consumeMessage(Message.info("Current context"));
-        MESSAGE_CONSUMER.consumeMessage(Message.info(context.toDisplayString()));
-        MESSAGE_CONSUMER.consumeMessage(Message.info("CopySnap properties: " + COPYSNAP_APP_PROPERTIES));
+        CONSOLE_PRINTER.consume(Level.INFO, "Current context\n" + context.toDisplayString());
+        CONSOLE_PRINTER.consume(Level.INFO, "CopySnap properties: " + COPYSNAP_APP_PROPERTIES_PATH);
     }
 
     /**
      * Creates a new snapshot using the currently loaded context.
-     * @param quiet If set, no console output will be printed.
      */
     @Command
-    public static void snapshot(
-            @Argument(flagValue = "true", defaultValue = "false") Boolean quiet
-    ) {
+    public static void snapshot() {
         Optional<Context> contextOpt = getLatestLoadedContext();
         if (contextOpt.isEmpty()) {
-            MESSAGE_CONSUMER.consumeMessage(Message.info("No context loaded."));
+            CONSOLE_PRINTER.consume(Level.INFO, "No context loaded.");
             return;
         }
         Context context = contextOpt.get();
-//                .withMessageConsumer(quiet ? MessageConsumer.quiet() : MESSAGE_CONSUMER);
+        context.addConsumer(CONSOLE_PRINTER);
         try {
             context.loadLatestSnapshot()
                     .createSnapshot()
@@ -131,29 +122,27 @@ public class Main {
         } catch (ContextIOException e) {
             throw new UncheckedIOException("Could not create snapshot: " + e.getMessage(), e);
         }
+        CONSOLE_PRINTER.consume(Level.INFO, "Created new snapshot in " + context.getContextHome());
+        status();
     }
 
     /**
      * Computes the file state of a specified directory and saves it as "latest" file system state to the current context.
      * Use this method to repair a broken or lost file system state of a previous snapshot.
      * @param directory The directory to compute a new file state of.
-     * @param quiet If set, no console output will be printed.
      */
     @Command
-    public static void recompute(
-            @Argument(necessity = REQUIRED, type = OPERAND) Path directory,
-            @Argument(flagValue = "true", defaultValue = "false") Boolean quiet
-    ) {
+    public static void recompute(@Argument(necessity = REQUIRED, type = OPERAND) Path directory) {
         Path resolvedPath = resolvePathToCwd(directory);
         Optional<Context> contextOpt = getLatestLoadedContext();
         if (contextOpt.isEmpty()) {
-            MESSAGE_CONSUMER.consumeMessage(Message.info("No context loaded."));
+            CONSOLE_PRINTER.consume(Level.INFO, "No context loaded.");
             return;
         }
         Context context = contextOpt.get();
-//                .withMessageConsumer(quiet ? MessageConsumer.quiet() : MESSAGE_CONSUMER);
+        context.addConsumer(CONSOLE_PRINTER);
         if (!resolvedPath.startsWith(context.getContextHome())) {
-            MESSAGE_CONSUMER.consumeMessage(Message.error("Can not compute file state outside of home path %s: %s".formatted(context.getContextHome(), resolvedPath)));
+            CONSOLE_PRINTER.consume(Level.INFO, "Can not compute file system state outside of home path %s: %s".formatted(context.getContextHome(), resolvedPath));
         }
         try {
             context.recomputeFileSystemState(resolvedPath)
@@ -161,6 +150,8 @@ public class Main {
         } catch (ContextIOException e) {
             throw new UncheckedIOException("Could not recompute file system state: " + e.getMessage(), e);
         }
+        CONSOLE_PRINTER.consume(Level.INFO, "Recomputed file states at " + resolvedPath);
+        status();
     }
 
     private static Optional<Context> getLatestLoadedContext() {
@@ -170,23 +161,14 @@ public class Main {
                 .map(Contexts::load);
     }
 
-    private static MessageConsumer newMessageConsumer() {
-        Console console = System.console();
-        if (console != null) {
-            return new ConcurrentMessageConsumer(console.writer());
-        } else {
-            return new ConcurrentMessageConsumer();
-        }
-    }
-
     private static Properties getAppProperties() {
         Properties properties = new Properties();
         try {
             // first, load embedded fallback properties
             properties.load(Main.class.getClassLoader().getResourceAsStream(COPYSNAP_PROPERTIES_FILENAME));
-            if (Files.isRegularFile(COPYSNAP_APP_PROPERTIES)) {
+            if (Files.isRegularFile(COPYSNAP_APP_PROPERTIES_PATH)) {
                 // then, load user properties
-                try (BufferedReader br = Files.newBufferedReader(COPYSNAP_APP_PROPERTIES)) {
+                try (BufferedReader br = Files.newBufferedReader(COPYSNAP_APP_PROPERTIES_PATH)) {
                     properties.load(br);
                 }
             }
@@ -206,10 +188,10 @@ public class Main {
     }
 
     private static void writeAppProperties() throws IOException {
-        Path parent = COPYSNAP_APP_PROPERTIES.getParent();
+        Path parent = COPYSNAP_APP_PROPERTIES_PATH.getParent();
         if (parent != null)
             Files.createDirectories(parent);
-        try (BufferedWriter bw = Files.newBufferedWriter(COPYSNAP_APP_PROPERTIES, StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+        try (BufferedWriter bw = Files.newBufferedWriter(COPYSNAP_APP_PROPERTIES_PATH, StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
             APP_PROPERTIES.store(bw, COPYSNAP_APP_NAME + " properties");
         }
     }

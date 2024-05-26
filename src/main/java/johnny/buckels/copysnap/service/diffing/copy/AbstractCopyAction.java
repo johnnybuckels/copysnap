@@ -13,9 +13,9 @@ abstract class AbstractCopyAction implements CopyAction {
     final Path relPath;
 
     protected AbstractCopyAction(Path sourceRoot, Path destinationRoot, Path relPath) {
-        this.sourceRoot = sourceRoot;
-        this.destinationRoot = destinationRoot;
-        this.relPath = relPath;
+        this.sourceRoot = Objects.requireNonNull(sourceRoot);
+        this.destinationRoot = Objects.requireNonNull(destinationRoot);
+        this.relPath = Objects.requireNonNull(relPath);
     }
 
     void createParentDirs(Path p, FileSystemAccessor fsa) throws IOException {

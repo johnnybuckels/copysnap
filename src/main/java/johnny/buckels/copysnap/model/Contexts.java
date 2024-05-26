@@ -2,9 +2,11 @@ package johnny.buckels.copysnap.model;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.Properties;
 import java.util.stream.Stream;
 
@@ -29,21 +31,21 @@ public class Contexts {
     }
 
     /**
-     * Tries to load a context deduced from properties at the specified path. The path must points to the properties
+     * Tries to load a context deduced from properties at the specified path. The path must point to the properties
      * file or to a directory directly containing the properties file at depth 1.
      */
     public static Context load(Path path) {
         Properties properties;
         try {
-            properties = findAndReadPlainProperties(path);
+            properties = findAndReadProperties(path);
         } catch (ContextIOException e) {
-            throw new UncheckedIOException("Could not load plain properties at %s: %s".formatted(path, e.getMessage()), e);
+            throw new UncheckedIOException("Could not load properties at %s: %s".formatted(path, e.getMessage()), e);
         }
         ContextProperties contextProperties = ContextProperties.fromProperties(properties);
         return new Context(contextProperties, null);
     }
 
-    private static Properties findAndReadPlainProperties(Path path) throws ContextIOException {
+    private static Properties findAndReadProperties(Path path) throws ContextIOException {
         Path pathToProperties;
         if (Files.isRegularFile(path)) {
             pathToProperties = path;
@@ -57,8 +59,8 @@ public class Contexts {
             throw new IllegalArgumentException("Not a file or directory: " + path);
         }
         Properties properties = new Properties();
-        try (BufferedReader br = Files.newBufferedReader(pathToProperties)) {
-            properties.load(br);
+        try (InputStream is = Files.newInputStream(pathToProperties, StandardOpenOption.READ)) {
+            properties.load(is);
         } catch (IOException e) {
             throw new ContextIOException("Could not load properties from " + pathToProperties, e);
         }
