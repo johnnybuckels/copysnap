@@ -1,21 +1,25 @@
 package com.github.johannesbuchholz.copysnap;
 
+import com.github.johannesbuchholz.copysnap.model.Context;
+import com.github.johannesbuchholz.copysnap.model.ContextIOException;
 import com.github.johannesbuchholz.copysnap.model.Contexts;
 import com.github.johannesbuchholz.copysnap.service.logging.ConsolePrintingLogConsumer;
+import com.github.johannesbuchholz.copysnap.service.logging.Level;
 import io.github.johannesbuchholz.clihats.core.execution.CliException;
 import io.github.johannesbuchholz.clihats.core.execution.exception.CliHelpCallException;
 import io.github.johannesbuchholz.clihats.processor.annotations.Argument;
 import io.github.johannesbuchholz.clihats.processor.annotations.Command;
 import io.github.johannesbuchholz.clihats.processor.annotations.CommandLineInterface;
 import io.github.johannesbuchholz.clihats.processor.execution.CliHats;
-import com.github.johannesbuchholz.copysnap.model.Context;
-import com.github.johannesbuchholz.copysnap.model.ContextIOException;
-import com.github.johannesbuchholz.copysnap.service.logging.Level;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 
@@ -25,18 +29,22 @@ import static io.github.johannesbuchholz.clihats.processor.annotations.Argument.
 /**
  * Tool to create lightweight incremental snapshots of a file system.
  */
-@CommandLineInterface(name = "copysnap", description = "Tool to create differential snapshots of a filesystem.")
+@CommandLineInterface(name = "copysnap")
 public class Main {
 
-    private static final String COPYSNAP_APP_NAME = ".copysnap";
-    private static final String COPYSNAP_PROPERTIES_FILENAME = "copysnap.properties";
-    private static final Path COPYSNAP_HOME_DIR=  Path.of(System.getProperty("user.home")).resolve(COPYSNAP_APP_NAME);
-    private static final Path COPYSNAP_APP_PROPERTIES_PATH = COPYSNAP_HOME_DIR.resolve(COPYSNAP_PROPERTIES_FILENAME);
+    public static final String APP_VERSION = Objects.requireNonNullElse(Main.class.getPackage().getImplementationVersion(), "unknown");
+
+    private static final String APP_NAME = ".copysnap";
+    private static final String APP_PROPERTIES_FILENAME = "copysnap.properties";
+    private static final Path APP_HOME_DIR =  Path.of(System.getProperty("user.home")).resolve(APP_NAME);
+    private static final Path APP_PROPERTIES_PATH = APP_HOME_DIR.resolve(APP_PROPERTIES_FILENAME);
     
     private static final String CURRENT_CONTEXT_PROPERTY_NAME = "contexts.current";
     private static final Properties APP_PROPERTIES = getAppProperties();
 
     private static final ConsolePrintingLogConsumer CONSOLE_PRINTER = new ConsolePrintingLogConsumer(Level.INFO);
+
+    private static Context latestContext = null;
 
     public static void main(String[] args) {
         try {
@@ -65,7 +73,7 @@ public class Main {
             throw new UncheckedIOException("Could not create new context: " + e.getMessage(), e);
         }
 
-        setAsCurrentContextInAppProperties(context);
+        setAsCurrentContext(context);
         CONSOLE_PRINTER.consume(Level.INFO, "Initialised context at " + context.getContextHome());
         status();
     }
@@ -79,9 +87,9 @@ public class Main {
             @Argument(necessity = REQUIRED, type = OPERAND) Path path
     ) {
         Path searchPathResolved = resolvePathToCwd(path);
-        Context context= Contexts.load(searchPathResolved);
+        Context context = Contexts.load(searchPathResolved);
 
-        setAsCurrentContextInAppProperties(context);
+        setAsCurrentContext(context);
         CONSOLE_PRINTER.consume(Level.INFO, "Loaded context " + context.getContextHome());
         status();
     }
@@ -98,7 +106,16 @@ public class Main {
         }
         Context context = contextOpt.get();
         CONSOLE_PRINTER.consume(Level.INFO, "Current context\n" + context.toDisplayString());
-        CONSOLE_PRINTER.consume(Level.INFO, "CopySnap properties: " + COPYSNAP_APP_PROPERTIES_PATH);
+        CONSOLE_PRINTER.consume(Level.INFO, "App properties: " + APP_PROPERTIES_PATH);
+        CONSOLE_PRINTER.consume(Level.INFO, "App version: " + APP_VERSION);
+    }
+
+    /**
+     * Displays the version of this application.
+     */
+    @Command(name = "--version")
+    public static void info() {
+        CONSOLE_PRINTER.consume(APP_VERSION);
     }
 
     /**
@@ -120,7 +137,7 @@ public class Main {
         } catch (ContextIOException e) {
             throw new UncheckedIOException("Could not create snapshot: " + e.getMessage(), e);
         }
-        CONSOLE_PRINTER.consume(Level.INFO, "Created new snapshot in " + context.getContextHome());
+        CONSOLE_PRINTER.consume(Level.INFO, "Created new snapshot in " + context.getLatestSnapshotLocation().orElse(null));
         status();
     }
 
@@ -148,25 +165,50 @@ public class Main {
         } catch (ContextIOException e) {
             throw new UncheckedIOException("Could not recompute file system state: " + e.getMessage(), e);
         }
-        CONSOLE_PRINTER.consume(Level.INFO, "Recomputed file states at " + resolvedPath);
+        status();
+    }
+
+    /**
+     * Loads only essential parameters from the properties at the specified path. Other parameters are reset.
+     * This method call should be followed up by 'recompute' as this method removes the latest file system state.
+     * This is useful for resolving compatibility issues between versions of context.properties files and CopySnap.
+     *
+     * @param path The path to the home directory of a context or its properties file.
+     */
+    @Command
+    public static void repair(
+            @Argument(necessity = REQUIRED, type = OPERAND) Path path
+    ) {
+        Path resolvePath = resolvePathToCwd(path);
+        Context minimalContext = Contexts.loadMinimal(resolvePath);
+        try {
+            minimalContext.write();
+        } catch (ContextIOException e) {
+            throw new UncheckedIOException(e);
+        }
+        CONSOLE_PRINTER.consume(Level.INFO, "Repaired context at " + minimalContext.getContextHome());
         status();
     }
 
     private static Optional<Context> getLatestLoadedContext() {
-        return Optional.ofNullable((String) APP_PROPERTIES.get(CURRENT_CONTEXT_PROPERTY_NAME))
-                .filter(s -> !s.isBlank())
-                .map(Path::of)
-                .map(Contexts::load);
+        if (latestContext == null) {
+            latestContext = Optional.ofNullable((String) APP_PROPERTIES.get(CURRENT_CONTEXT_PROPERTY_NAME))
+                    .filter(s -> !s.isBlank())
+                    .map(Path::of)
+                    .map(Contexts::load)
+                    .orElse(null);
+        }
+        return Optional.ofNullable(latestContext);
     }
 
     private static Properties getAppProperties() {
         Properties properties = new Properties();
         try {
             // first, load embedded fallback properties
-            properties.load(Main.class.getClassLoader().getResourceAsStream(COPYSNAP_PROPERTIES_FILENAME));
-            if (Files.isRegularFile(COPYSNAP_APP_PROPERTIES_PATH)) {
+            properties.load(Main.class.getClassLoader().getResourceAsStream(APP_PROPERTIES_FILENAME));
+            if (Files.isRegularFile(APP_PROPERTIES_PATH)) {
                 // then, load user properties
-                try (BufferedReader br = Files.newBufferedReader(COPYSNAP_APP_PROPERTIES_PATH)) {
+                try (BufferedReader br = Files.newBufferedReader(APP_PROPERTIES_PATH)) {
                     properties.load(br);
                 }
             }
@@ -176,7 +218,8 @@ public class Main {
         return properties;
     }
 
-    private static void setAsCurrentContextInAppProperties(Context context) {
+    private static void setAsCurrentContext(Context context) {
+        latestContext = context;
         APP_PROPERTIES.put(CURRENT_CONTEXT_PROPERTY_NAME, context.getContextHome().toString());
         try {
             writeAppProperties();
@@ -186,11 +229,11 @@ public class Main {
     }
 
     private static void writeAppProperties() throws IOException {
-        Path parent = COPYSNAP_APP_PROPERTIES_PATH.getParent();
+        Path parent = APP_PROPERTIES_PATH.getParent();
         if (parent != null)
             Files.createDirectories(parent);
-        try (BufferedWriter bw = Files.newBufferedWriter(COPYSNAP_APP_PROPERTIES_PATH, StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
-            APP_PROPERTIES.store(bw, COPYSNAP_APP_NAME + " properties");
+        try (BufferedWriter bw = Files.newBufferedWriter(APP_PROPERTIES_PATH, StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+            APP_PROPERTIES.store(bw, APP_NAME + " properties");
         }
     }
 

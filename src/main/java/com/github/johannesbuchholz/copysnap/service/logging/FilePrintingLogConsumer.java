@@ -1,6 +1,9 @@
 package com.github.johannesbuchholz.copysnap.service.logging;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,11 +31,11 @@ public class FilePrintingLogConsumer implements LogConsumer, AutoCloseable  {
     }
 
     @Override
-    public void consume(Level level, String line) {
+    public void consume(Level level, String message) {
         if (!isLevelRelevant(level)) {
             return;
         }
-        writer.println("[%s] %s".formatted(level, line));
+        writer.println("[%s] %s".formatted(level, message));
     }
 
     @Override

@@ -11,7 +11,6 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -42,7 +41,7 @@ public class FileSystemDiffService extends AbstractLogProducer {
         FileSystemNode systemDiffTree = FileSystemNode.getNew();
 
         ZonedDateTime start = ZonedDateTime.now();
-        log(Level.INFO, "Computing file differences - started: %s, at: %s)".formatted(start.toLocalDateTime().truncatedTo(ChronoUnit.SECONDS), sourceRoot.pathToRootDir()));
+        logTaskStart(Level.INFO, "Computing file differences", start, "at", sourceRoot.pathToRootDir());
         try (Stream<Path> paths = fileSystemAccessor.findFiles(sourceRoot.pathToRootDir())) {
             paths
                 .map(p -> sourceRoot.rootDirLocation().relativize(p))
@@ -78,7 +77,7 @@ public class FileSystemDiffService extends AbstractLogProducer {
         int removedCount = removedStates.fileCount();
         log(Level.INFO, "File differences: %s new, %s changed, %s removed, %s unchanged, %s erroneous"
                 .formatted(newCount, changedCount, removedCount, unchangedCount, errorCount));
-        log(Level.INFO, "Done computing file differences (%s ms)".formatted(Duration.between(start, ZonedDateTime.now()).toMillis()));
+        logTaskEnd(Level.INFO, "Done computing file differences", Duration.between(start, ZonedDateTime.now()));
         return new FileSystemDiff(
                 sourceRoot,
                 remainingStates,

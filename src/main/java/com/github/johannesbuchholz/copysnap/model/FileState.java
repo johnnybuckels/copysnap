@@ -1,5 +1,8 @@
 package com.github.johannesbuchholz.copysnap.model;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
@@ -19,6 +22,22 @@ public record FileState(Path path, Instant lastModified, CheckpointChecksum chec
         Instant modified = Instant.parse(matcher.group("modified"));
         Path path = Path.of(matcher.group("path"));
         return new FileState(path, modified, checksum);
+    }
+
+    public static FileState readFileState(Path rootToRelativizeAgainst, Path absPath) throws UncheckedIOException {
+        Instant lastModified;
+        try {
+            lastModified = Files.getLastModifiedTime(absPath).toInstant();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not read last modified from %s: %s".formatted(absPath, e.getMessage()), e);
+        }
+        CheckpointChecksum checksum;
+        try {
+            checksum = CheckpointChecksum.from(Files.newInputStream(absPath));
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not create checksum from %s: %s".formatted(absPath, e.getMessage()), e);
+        }
+        return new FileState(rootToRelativizeAgainst.relativize(absPath), lastModified, checksum);
     }
 
     public FileState {

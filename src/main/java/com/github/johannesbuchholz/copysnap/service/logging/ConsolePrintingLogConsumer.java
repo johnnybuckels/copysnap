@@ -9,13 +9,8 @@ public record ConsolePrintingLogConsumer(Level level) implements LogConsumer {
 
     private static final String FORMAT = "[%s] %s%n";
 
-    @Override
-    public void consume(Level level, String line) {
-        if (!isLevelRelevant(level)) {
-            return;
-        }
-        OUT.printf(FORMAT, level.name(), line);
-        OUT.flush();
+    public void consume(String message) {
+        consume(Level.NONE, message);
     }
 
     public void consume(Level level, Throwable e) {
@@ -23,6 +18,19 @@ public record ConsolePrintingLogConsumer(Level level) implements LogConsumer {
         PrintStream printStream = new PrintStream(out);
         e.printStackTrace(printStream);
         consume(level, out.toString());
+    }
+
+    @Override
+    public void consume(Level level, String message) {
+        if (!isLevelRelevant(level)) {
+            return;
+        }
+        if (level == Level.NONE) {
+            OUT.println(message);
+        } else {
+            OUT.printf(FORMAT, level.name(), message);
+            OUT.flush();
+        }
     }
 
 }

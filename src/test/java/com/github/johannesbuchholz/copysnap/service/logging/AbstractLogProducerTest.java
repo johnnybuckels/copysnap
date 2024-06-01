@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class AbstractLogProducerTest {
 
@@ -29,10 +29,10 @@ class AbstractLogProducerTest {
         }
 
         @Override
-        public void consume(Level level, String line) {
+        public void consume(Level level, String message) {
             if (!isLevelRelevant(level))
                 return;
-            logs.add(new Log(level, line));
+            logs.add(new Log(level, message));
         }
 
         @Override

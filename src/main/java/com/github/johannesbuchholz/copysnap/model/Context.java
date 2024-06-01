@@ -1,21 +1,23 @@
 package com.github.johannesbuchholz.copysnap.model;
 
+import com.github.johannesbuchholz.copysnap.Main;
 import com.github.johannesbuchholz.copysnap.service.diffing.FileSystemAccessor;
 import com.github.johannesbuchholz.copysnap.service.diffing.FileSystemDiff;
 import com.github.johannesbuchholz.copysnap.service.diffing.FileSystemDiffService;
 import com.github.johannesbuchholz.copysnap.service.logging.AbstractLogProducer;
 import com.github.johannesbuchholz.copysnap.service.logging.FilePrintingLogConsumer;
-import com.github.johannesbuchholz.copysnap.service.logging.LogConsumer;
 import com.github.johannesbuchholz.copysnap.service.logging.Level;
+import com.github.johannesbuchholz.copysnap.service.logging.LogConsumer;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.*;
-import java.time.Instant;
+import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -48,7 +50,7 @@ public class Context extends AbstractLogProducer {
         try {
             fsa.createDirectories(newSnapshotDir);
         } catch (IOException e) {
-            throw new ContextIOException("Coulkd not create new snapshot directory at %s: %s".formatted(newSnapshotDir, e.getMessage()), e);
+            throw new ContextIOException("Could not create new snapshot directory at %s: %s".formatted(newSnapshotDir, e.getMessage()), e);
         }
 
         FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
@@ -62,7 +64,7 @@ public class Context extends AbstractLogProducer {
             logConsumers.forEach(copyActions::addConsumer);
 
             FileSystemState newState = copyActions.apply(fsa);
-            ContextProperties updatedProperties = properties.withSnapshotProperties(new ContextProperties.SnapshotProperties(newSnapshotDir, Instant.now(), newState.fileCount()));
+            ContextProperties updatedProperties = properties.withSnapshotProperties(new ContextProperties.SnapshotProperties(newSnapshotDir, ZonedDateTime.now(), newState.fileCount()));
 
             newSnapshotContext = new Context(updatedProperties, newState, logConsumers);
             removeConsumer(report);
@@ -74,6 +76,8 @@ public class Context extends AbstractLogProducer {
 
     public Context loadLatestSnapshot() throws ContextIOException {
         Path latestSnapshotFile = properties.snapshotsHomeDir().resolve(LATEST_FILE_STATE_FILE_NAME);
+        ZonedDateTime start = ZonedDateTime.now();
+        logTaskStart(Level.INFO, "Loading latest snapshot file system state", start, "from", latestSnapshotFile);
         if (!Files.isRegularFile(latestSnapshotFile)) {
             log(Level.INFO, "Could not find latest snapshot at %s. Loading with empty file system state.".formatted(latestSnapshotFile));
             ContextProperties newProperties = properties.withSnapshotProperties(ContextProperties.SnapshotProperties.EMPTY);
@@ -85,6 +89,7 @@ public class Context extends AbstractLogProducer {
         } catch (IOException e) {
             throw new ContextIOException("Could not read latest FileSystemState from %s: %s".formatted(latestSnapshotFile, e.getMessage()), e);
         }
+        logTaskEnd(Level.INFO, "Done loading latest snapshot file system state", Duration.between(start, ZonedDateTime.now()));
         return new Context(properties, fss, logConsumers);
     }
 
@@ -94,32 +99,36 @@ public class Context extends AbstractLogProducer {
      */
     public Context recomputeFileSystemState(Path sourceDir) throws ContextIOException {
         Root rootToComputeStateFrom = Root.from(sourceDir);
-        log(Level.DEBUG, "Recomputing file system state at %s".formatted(rootToComputeStateFrom));
+        ZonedDateTime start = ZonedDateTime.now();
+        logTaskStart(Level.INFO, "Recomputing file system state", start, "from", rootToComputeStateFrom);
         FileSystemState.Builder builder = FileSystemState.builder();
         try (Stream<Path> files = Files.walk(rootToComputeStateFrom.pathToRootDir(), FileVisitOption.FOLLOW_LINKS)) {
             files
                     .filter(Files::isRegularFile)
-                    .map(absPath -> readFileState(rootToComputeStateFrom.rootDirLocation(), absPath))
+                    .map(absPath -> FileState.readFileState(rootToComputeStateFrom.rootDirLocation(), absPath))
                     .forEach(builder::add);
         } catch (IOException e) {
             throw new ContextIOException("Could not iterate over directory contents at " + rootToComputeStateFrom.pathToRootDir() + ": " + e.getMessage(), e);
         }
         FileSystemState newFss = builder.build();
         ContextProperties updatedProperties = properties
-                .withSnapshotProperties(new ContextProperties.SnapshotProperties(rootToComputeStateFrom.rootDirLocation(), Instant.now(), newFss.fileCount()));
+                .withSnapshotProperties(new ContextProperties.SnapshotProperties(rootToComputeStateFrom.rootDirLocation(), ZonedDateTime.now(), newFss.fileCount()));
+        logTaskEnd(Level.INFO, "Done recomputing file system state", Duration.between(start, ZonedDateTime.now()));
         return new Context(updatedProperties, newFss, logConsumers);
     }
 
     public void write() throws ContextIOException {
+        ZonedDateTime start = ZonedDateTime.now();
+        Path propertiesFile = properties.snapshotsHomeDir().resolve(CONTEXT_PROPERTIES_FILE_NAME);
+        logTaskStart(Level.DEBUG, "Start writing context", start, "at", propertiesFile);
         try {
-            Files.createDirectories(properties.snapshotsHomeDir());
+            Files.createDirectories(propertiesFile.getParent());
         } catch (IOException e) {
             throw new ContextIOException("Could not create snapshot home directories at %s: %s".formatted(properties.snapshotsHomeDir(), e.getMessage()), e);
         }
-        Path propertiesFile = properties.snapshotsHomeDir().resolve(CONTEXT_PROPERTIES_FILE_NAME);
         try (OutputStream propertiesOs = Files.newOutputStream(propertiesFile, CREATE_OVERWRITE_OPEN_OPTIONS)) {
             properties.toProperties()
-                    .store(propertiesOs, "CopySnap properties at %s".formatted(properties.snapshotsHomeDir()));
+                    .store(propertiesOs, "CopySnap properties at %s written with version %s".formatted(properties.snapshotsHomeDir(), Main.APP_VERSION));
         } catch (IOException e) {
             throw new ContextIOException("Could not write context properties to %s: %s".formatted(propertiesFile, e.getMessage()), e);
         }
@@ -132,36 +141,22 @@ public class Context extends AbstractLogProducer {
                 throw new ContextIOException("Could not write latest file states to %s: %s".formatted(latestStateFile, e.getMessage()), e);
             }
         } else {
-            log(Level.DEBUG, "Writing context info: No latest file system state");
+            log(Level.DEBUG, "Writing context properties: No latest file system state");
         }
+        logTaskEnd(Level.DEBUG, "Done writing context properties", Duration.between(start, ZonedDateTime.now()));
     }
 
     public Path getContextHome() {
         return properties.snapshotsHomeDir();
     }
 
-    public String toDisplayString() {
-        return properties.toDisplayString();
+    public Optional<Path> getLatestSnapshotLocation() {
+        return Optional.ofNullable(properties.snapshotProperties())
+                .map(ContextProperties.SnapshotProperties::rootLocation);
     }
 
-    private FileState readFileState(Path rootToRelativizeAgainst, Path absPath) {
-        Instant lastModified;
-        try {
-            lastModified = Files.getLastModifiedTime(absPath).toInstant();
-        } catch (IOException e) {
-            log(Level.ERROR, "Could not read last modified from %s: %s".formatted(absPath, e.getMessage()));
-            logStacktrace(Level.DEBUG, e);
-            lastModified = Instant.now();
-        }
-        CheckpointChecksum checksum;
-        try {
-            checksum = CheckpointChecksum.from(Files.newInputStream(absPath));
-        } catch (IOException e) {
-            log(Level.ERROR, "Could not create checksum from %s: %s".formatted(absPath, e.getMessage()));
-            logStacktrace(Level.DEBUG, e);
-            checksum = CheckpointChecksum.undefined();
-        }
-        return new FileState(rootToRelativizeAgainst.relativize(absPath), lastModified, checksum);
+    public String toDisplayString() {
+        return properties.toDisplayString();
     }
 
     private String generateSnapshotName() {

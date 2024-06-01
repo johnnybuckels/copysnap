@@ -6,7 +6,7 @@ package com.github.johannesbuchholz.copysnap.service.logging;
  */
 public interface LogConsumer {
 
-    void consume(Level level, String line);
+    void consume(Level level, String message);
 
     Level level();
 

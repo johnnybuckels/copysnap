@@ -1,19 +1,18 @@
 package com.github.johannesbuchholz.copysnap.service.diffing;
 
-import com.github.johannesbuchholz.copysnap.service.logging.AbstractLogProducer;
-import com.github.johannesbuchholz.copysnap.service.logging.ProgressConsolePrinter;
 import com.github.johannesbuchholz.copysnap.model.FileSystemState;
 import com.github.johannesbuchholz.copysnap.model.Root;
 import com.github.johannesbuchholz.copysnap.service.diffing.copy.CopyAction;
 import com.github.johannesbuchholz.copysnap.service.diffing.copy.PlainCopyAction;
 import com.github.johannesbuchholz.copysnap.service.diffing.copy.SymbolicLinkCopyAction;
+import com.github.johannesbuchholz.copysnap.service.logging.AbstractLogProducer;
 import com.github.johannesbuchholz.copysnap.service.logging.Level;
+import com.github.johannesbuchholz.copysnap.service.logging.ProgressConsolePrinter;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.ZonedDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -58,7 +57,7 @@ public record FileSystemDiff(
          */
         public FileSystemState apply(FileSystemAccessor fsa) {
             ZonedDateTime start = ZonedDateTime.now();
-            log(Level.INFO, "Applying copy actions - started: %s, count: %s".formatted(start.toLocalDateTime().truncatedTo(ChronoUnit.SECONDS), copyActions.size()));
+            logTaskStart(Level.INFO, "Applying copy actions", start, "count", copyActions.size());
             int performedCount = 0;
             PROGRESS_CONSOLE_PRINTER.update(performedCount, copyActions.size());
             FileSystemState.Builder newStateBuilder = FileSystemState.builder(stillExistingFiles);
@@ -75,7 +74,7 @@ public record FileSystemDiff(
                 PROGRESS_CONSOLE_PRINTER.update(++performedCount, copyActions.size());
             }
             PROGRESS_CONSOLE_PRINTER.newLine();
-            log(Level.INFO, "Done applying copy actions (%s ms)".formatted(Duration.between(start, ZonedDateTime.now()).toMillis()));
+            logTaskEnd(Level.INFO,  "Done applying copy actions", Duration.between(start, ZonedDateTime.now()));
             return newStateBuilder.build();
         }
 
