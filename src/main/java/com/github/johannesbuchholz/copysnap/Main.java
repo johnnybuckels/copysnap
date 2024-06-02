@@ -1,7 +1,6 @@
 package com.github.johannesbuchholz.copysnap;
 
 import com.github.johannesbuchholz.copysnap.model.Context;
-import com.github.johannesbuchholz.copysnap.model.ContextIOException;
 import com.github.johannesbuchholz.copysnap.model.Contexts;
 import com.github.johannesbuchholz.copysnap.service.logging.ConsolePrintingLogConsumer;
 import com.github.johannesbuchholz.copysnap.service.logging.Level;
@@ -66,15 +65,12 @@ public class Main {
     ) {
         Path cwd = Path.of(System.getProperty("user.dir"));
         Path sourceDirResolved = resolvePathToCwd(source);
+
         Context context = Contexts.createNew(sourceDirResolved, cwd);
-        try {
-            context.write();
-        } catch (ContextIOException e) {
-            throw new UncheckedIOException("Could not create new context: " + e.getMessage(), e);
-        }
+        context = context.write();
+        CONSOLE_PRINTER.consume(Level.INFO, "Initialised context at " + context.getContextHome());
 
         setAsCurrentContext(context);
-        CONSOLE_PRINTER.consume(Level.INFO, "Initialised context at " + context.getContextHome());
         status();
     }
 
@@ -88,9 +84,9 @@ public class Main {
     ) {
         Path searchPathResolved = resolvePathToCwd(path);
         Context context = Contexts.load(searchPathResolved);
+        CONSOLE_PRINTER.consume(Level.INFO, "Loaded context " + context.getContextHome());
 
         setAsCurrentContext(context);
-        CONSOLE_PRINTER.consume(Level.INFO, "Loaded context " + context.getContextHome());
         status();
     }
 
@@ -130,14 +126,12 @@ public class Main {
         }
         Context context = contextOpt.get();
         context.addConsumer(CONSOLE_PRINTER);
-        try {
-            context.loadLatestSnapshot()
-                    .createSnapshot()
-                    .write();
-        } catch (ContextIOException e) {
-            throw new UncheckedIOException("Could not create snapshot: " + e.getMessage(), e);
-        }
-        CONSOLE_PRINTER.consume(Level.INFO, "Created new snapshot in " + context.getLatestSnapshotLocation().orElse(null));
+
+        context = context.loadLatestSnapshot()
+                .createSnapshot()
+                .write();
+
+        setAsCurrentContext(context);
         status();
     }
 
@@ -155,16 +149,15 @@ public class Main {
             return;
         }
         Context context = contextOpt.get();
-        context.addConsumer(CONSOLE_PRINTER);
         if (!resolvedPath.startsWith(context.getContextHome())) {
             CONSOLE_PRINTER.consume(Level.INFO, "Can not compute file system state outside of home path %s: %s".formatted(context.getContextHome(), resolvedPath));
         }
-        try {
-            context.recomputeFileSystemState(resolvedPath)
-                    .write();
-        } catch (ContextIOException e) {
-            throw new UncheckedIOException("Could not recompute file system state: " + e.getMessage(), e);
-        }
+
+        context.addConsumer(CONSOLE_PRINTER);
+        context = context.recomputeFileSystemState(resolvedPath)
+                .write();
+
+        setAsCurrentContext(context);
         status();
     }
 
@@ -180,13 +173,34 @@ public class Main {
             @Argument(necessity = REQUIRED, type = OPERAND) Path path
     ) {
         Path resolvePath = resolvePathToCwd(path);
+
         Context minimalContext = Contexts.loadMinimal(resolvePath);
-        try {
-            minimalContext.write();
-        } catch (ContextIOException e) {
-            throw new UncheckedIOException(e);
-        }
+        minimalContext = minimalContext.write();
         CONSOLE_PRINTER.consume(Level.INFO, "Repaired context at " + minimalContext.getContextHome());
+
+        setAsCurrentContext(minimalContext);
+        status();
+    }
+
+    /**
+     * Creates a copy of the current context's snapshot as a new snapshot by replacing symlinks with actual file copies.
+     * The resulting snapshot will only consist of "hard" file copies.
+     */
+    @Command
+    public static void solidify() {
+        Optional<Context> contextOpt = getLatestLoadedContext();
+        if (contextOpt.isEmpty()) {
+            CONSOLE_PRINTER.consume(Level.INFO, "No context loaded.");
+            return;
+        }
+        Context context = contextOpt.get();
+        context.addConsumer(CONSOLE_PRINTER);
+
+        context = context
+                .solidify()
+                .write();
+
+        setAsCurrentContext(context);
         status();
     }
 

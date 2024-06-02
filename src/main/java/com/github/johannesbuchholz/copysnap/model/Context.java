@@ -4,26 +4,31 @@ import com.github.johannesbuchholz.copysnap.Main;
 import com.github.johannesbuchholz.copysnap.service.diffing.FileSystemAccessor;
 import com.github.johannesbuchholz.copysnap.service.diffing.FileSystemDiff;
 import com.github.johannesbuchholz.copysnap.service.diffing.FileSystemDiffService;
-import com.github.johannesbuchholz.copysnap.service.logging.AbstractLogProducer;
-import com.github.johannesbuchholz.copysnap.service.logging.FilePrintingLogConsumer;
-import com.github.johannesbuchholz.copysnap.service.logging.Level;
-import com.github.johannesbuchholz.copysnap.service.logging.LogConsumer;
+import com.github.johannesbuchholz.copysnap.service.diffing.copy.CopyAction;
+import com.github.johannesbuchholz.copysnap.service.diffing.copy.PlainCopyAction;
+import com.github.johannesbuchholz.copysnap.service.logging.*;
+import com.github.johannesbuchholz.copysnap.util.TimeUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.nio.file.*;
 import java.time.Duration;
 import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
-import java.util.Optional;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
 
 public class Context extends AbstractLogProducer {
 
+    /*
+    We separated the actual file system state from the context and snapshot properties as loading the potentially large
+    file system state might be too resource consuming and even unwanted for certain operations.
+     */
     private final ContextProperties properties;
+    // nullable
     private final FileSystemState latest;
 
     static final String CONTEXT_PROPERTIES_FILE_NAME = "context.properties";
@@ -40,47 +45,59 @@ public class Context extends AbstractLogProducer {
         this.latest = latest;
     }
 
-    public Context createSnapshot() throws ContextIOException {
+    public Context createSnapshot() {
         if (latest == null)
             throw new IllegalStateException("Can not create snapshot without a loaded latest file system state.");
-        Path newSnapshotDir = properties.snapshotsHomeDir().resolve(generateSnapshotName());
-        Path latestRootLocation = properties.snapshotProperties().rootLocation();
+        SnapshotName snapshotName = SnapshotName.getNew();
+        ZonedDateTime start = snapshotName.created();
+        Path newSnapshotDir = properties.snapshotsHomeDir().resolve(snapshotName.asString());
+
+        Path latestRootLocation = null;
+        if (properties.snapshotProperties() != null) {
+            // here if there has been an earlier snapshot.
+            latestRootLocation = properties.snapshotProperties().rootDirLocation();
+        }
 
         FileSystemAccessor fsa = FileSystemAccessor.newDefaultAccessor();
         try {
             fsa.createDirectories(newSnapshotDir);
         } catch (IOException e) {
-            throw new ContextIOException("Could not create new snapshot directory at %s: %s".formatted(newSnapshotDir, e.getMessage()), e);
+            throw new UncheckedIOException(e);
         }
 
-        FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
-        Context newSnapshotContext;
+        FileSystemState newState;
         try (FilePrintingLogConsumer report = FilePrintingLogConsumer.at(newSnapshotDir.resolve("report.txt"))) {
             addConsumer(report);
+            logTaskStart(Level.INFO, "Creating new snapshot", start, "at", newSnapshotDir);
+
+
+            FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
             logConsumers.forEach(fileSystemDiffService::addConsumer);
             FileSystemDiff.Actions copyActions = fileSystemDiffService
                     .computeDiff(properties.source(), latest)
                     .computeCopyActions(newSnapshotDir, latestRootLocation);
             logConsumers.forEach(copyActions::addConsumer);
-
-            FileSystemState newState = copyActions.apply(fsa);
-            ContextProperties updatedProperties = properties.withSnapshotProperties(new ContextProperties.SnapshotProperties(newSnapshotDir, ZonedDateTime.now(), newState.fileCount()));
-
-            newSnapshotContext = new Context(updatedProperties, newState, logConsumers);
-            removeConsumer(report);
+            newState = copyActions.apply(fsa);
         } catch (IOException e) {
-            throw new ContextIOException("Could not create snapshot: " + e.getMessage(), e);
+            String errorMsg = "Could not create snapshot: " + e.getMessage();
+            log(Level.ERROR, errorMsg);
+            logStacktrace(Level.ERROR, e);
+            throw new ContextIOException(errorMsg, e);
         }
-        return newSnapshotContext;
+        ContextProperties updatedProperties = properties.withSnapshotProperties(
+                new ContextProperties.SnapshotProperties(newSnapshotDir, snapshotName.created(), newState.fileCount()));
+
+        logTaskEnd(Level.INFO, "Done creating new snapshot", Duration.between(start, ZonedDateTime.now()));
+        return new Context(updatedProperties, newState, logConsumers);
     }
 
-    public Context loadLatestSnapshot() throws ContextIOException {
+    public Context loadLatestSnapshot() {
         Path latestSnapshotFile = properties.snapshotsHomeDir().resolve(LATEST_FILE_STATE_FILE_NAME);
         ZonedDateTime start = ZonedDateTime.now();
         logTaskStart(Level.INFO, "Loading latest snapshot file system state", start, "from", latestSnapshotFile);
         if (!Files.isRegularFile(latestSnapshotFile)) {
             log(Level.INFO, "Could not find latest snapshot at %s. Loading with empty file system state.".formatted(latestSnapshotFile));
-            ContextProperties newProperties = properties.withSnapshotProperties(ContextProperties.SnapshotProperties.EMPTY);
+            ContextProperties newProperties = properties.withSnapshotProperties(null);
             return new Context(newProperties, FileSystemState.empty(), logConsumers);
         }
         FileSystemState fss;
@@ -97,10 +114,10 @@ public class Context extends AbstractLogProducer {
      * Intended to reproduce a file system state of an older snapshot or to repair a broken file system state.
      * @param sourceDir The directory to compute the new state from.
      */
-    public Context recomputeFileSystemState(Path sourceDir) throws ContextIOException {
+    public Context recomputeFileSystemState(Path sourceDir) {
         Root rootToComputeStateFrom = Root.from(sourceDir);
         ZonedDateTime start = ZonedDateTime.now();
-        logTaskStart(Level.INFO, "Recomputing file system state", start, "from", rootToComputeStateFrom);
+        logTaskStart(Level.INFO, "Recomputing file system state", start, "from", rootToComputeStateFrom.pathToRootDir());
         FileSystemState.Builder builder = FileSystemState.builder();
         try (Stream<Path> files = Files.walk(rootToComputeStateFrom.pathToRootDir(), FileVisitOption.FOLLOW_LINKS)) {
             files
@@ -117,7 +134,72 @@ public class Context extends AbstractLogProducer {
         return new Context(updatedProperties, newFss, logConsumers);
     }
 
-    public void write() throws ContextIOException {
+    // TODO: Move logic to separate Service and test
+    public Context solidify() {
+        if (properties.snapshotProperties() == null) {
+            log(Level.INFO, "Unable to solidify context: No latest snapshot available.");
+            return this;
+        }
+        Path latestSnapshotRootLocation = properties.snapshotProperties().rootDirLocation();
+
+        SnapshotName snapshotName = SnapshotName.getNew();
+        Path newSnapshotDir = properties.snapshotsHomeDir().resolve(snapshotName.asString());
+
+        FileSystemAccessor fsa = FileSystemAccessor.newDefaultAccessor();
+        try {
+            fsa.createDirectories(newSnapshotDir);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+
+        ZonedDateTime start = snapshotName.created();
+        try (FilePrintingLogConsumer report = FilePrintingLogConsumer.at(newSnapshotDir.resolve("report.txt"))) {
+            addConsumer(report);
+            logTaskStart(Level.INFO, "Solidifying snapshots", start, "at", newSnapshotDir, "source snapshot", latestSnapshotRootLocation);
+
+            List<PlainCopyAction> copyActions;
+            try (Stream<Path> files = Files.walk(latestSnapshotRootLocation.resolve(properties.source().retrieveName()), FileVisitOption.FOLLOW_LINKS)) {
+                copyActions = files
+                        .filter(Files::isRegularFile)
+                        .map(p -> new PlainCopyAction(
+                                latestSnapshotRootLocation,
+                                newSnapshotDir,
+                                latestSnapshotRootLocation.relativize(p)))
+                        .toList();
+            }
+            ProgressConsolePrinter progressConsolePrinter = new ProgressConsolePrinter("Copying files");
+            int performedCount = 0;
+            progressConsolePrinter.update(performedCount, copyActions.size());
+            for (CopyAction copyAction : copyActions) {
+                log(Level.DEBUG, "Apply %s".formatted(copyAction));
+                try {
+                    // we do not store file states as we only copy already known files from existing snapshots
+                    copyAction.perform(fsa);
+                } catch (IOException e) {
+                    String errorMsg = "Could not apply copy action " + copyAction + ": " + e;
+                    log(Level.ERROR, errorMsg);
+                    logStacktrace(Level.DEBUG, e);
+                }
+                progressConsolePrinter.update(++performedCount, copyActions.size());
+            }
+            progressConsolePrinter.newLine();
+        } catch (IOException e) {
+            String errorMsg = "Could not solidify snapshots: " + e.getMessage();
+            log(Level.ERROR, errorMsg);
+            logStacktrace(Level.ERROR, e);
+            throw new ContextIOException(errorMsg, e);
+        }
+        ContextProperties.SnapshotProperties snapshotProperties = new ContextProperties.SnapshotProperties(
+                newSnapshotDir, snapshotName.created(), properties.snapshotProperties().fileCount());
+        ContextProperties newContextProperties = properties.withSnapshotProperties(snapshotProperties);
+
+        logTaskEnd(Level.INFO, "Done solidifying snapshots", Duration.between(start, ZonedDateTime.now()));
+        // latest fss does not change as we did not read any new files from the source directory.
+        return new Context(newContextProperties, latest, logConsumers);
+    }
+
+    // TODO: Move to Contexts?
+    public Context write() {
         ZonedDateTime start = ZonedDateTime.now();
         Path propertiesFile = properties.snapshotsHomeDir().resolve(CONTEXT_PROPERTIES_FILE_NAME);
         logTaskStart(Level.DEBUG, "Start writing context", start, "at", propertiesFile);
@@ -144,23 +226,26 @@ public class Context extends AbstractLogProducer {
             log(Level.DEBUG, "Writing context properties: No latest file system state");
         }
         logTaskEnd(Level.DEBUG, "Done writing context properties", Duration.between(start, ZonedDateTime.now()));
+        return this;
     }
 
     public Path getContextHome() {
         return properties.snapshotsHomeDir();
     }
 
-    public Optional<Path> getLatestSnapshotLocation() {
-        return Optional.ofNullable(properties.snapshotProperties())
-                .map(ContextProperties.SnapshotProperties::rootLocation);
-    }
-
     public String toDisplayString() {
         return properties.toDisplayString();
     }
 
-    private String generateSnapshotName() {
-        return ZonedDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss"));
-    }
+    private record SnapshotName(ZonedDateTime created) {
 
+        static SnapshotName getNew() {
+            return new SnapshotName(ZonedDateTime.now());
+        }
+
+        String asString() {
+            return TimeUtils.asString(created);
+        }
+
+    }
 }

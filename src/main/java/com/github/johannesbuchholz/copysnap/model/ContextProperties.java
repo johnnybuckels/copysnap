@@ -7,7 +7,7 @@ import java.time.ZonedDateTime;
 import java.util.Optional;
 import java.util.Properties;
 
-record ContextProperties(Root source, Path snapshotsHomeDir, ZonedDateTime created, SnapshotProperties snapshotProperties) {
+record ContextProperties(Root source, Path snapshotsHomeDir, ZonedDateTime created, /* nullable */ SnapshotProperties snapshotProperties) {
 
     static final String SOURCE_DIR_KEY = "sourceDir";
     private static final String SNAPSHOTS_HOME_DIR_KEY = "snapshotsHomeDir";
@@ -61,17 +61,15 @@ record ContextProperties(Root source, Path snapshotsHomeDir, ZonedDateTime creat
         return new ContextProperties(source, snapshotsHomeDir, created, snapshotProperties);
     }
 
-    record SnapshotProperties(Path rootLocation, ZonedDateTime created, int fileCount) {
+    record SnapshotProperties(Path rootDirLocation, ZonedDateTime created, int fileCount) {
 
         private static final String ROOT_LOCATION_KEY = "latestSnapshotRootLocation";
         private static final String CREATED_KEY = "latestSnapshotCreated";
         private static final String FILE_COUNT_KEY = "latestSnapshotFileCount";
 
-        static final SnapshotProperties EMPTY = new ContextProperties.SnapshotProperties(null, ZonedDateTime.now(), -1);
-
         private Properties toProperties() {
             Properties properties = new Properties();
-            properties.put(ROOT_LOCATION_KEY, rootLocation.toString());
+            properties.put(ROOT_LOCATION_KEY, rootDirLocation.toString());
             properties.put(CREATED_KEY, TimeUtils.asString(created));
             properties.put(FILE_COUNT_KEY, String.valueOf(fileCount));
             return properties;
@@ -81,7 +79,7 @@ record ContextProperties(Root source, Path snapshotsHomeDir, ZonedDateTime creat
             if (!properties.containsKey(ROOT_LOCATION_KEY)) {
                 return null;
             }
-            Path rootLocation = Optional.ofNullable(properties.getProperty(ROOT_LOCATION_KEY))
+            Path rootDirLocation = Optional.ofNullable(properties.getProperty(ROOT_LOCATION_KEY))
                     .map(Path::of)
                     .orElseThrow(() -> illegalPropertiesException(properties, ROOT_LOCATION_KEY));
             ZonedDateTime created = Optional.ofNullable(properties.getProperty(CREATED_KEY))
@@ -90,14 +88,14 @@ record ContextProperties(Root source, Path snapshotsHomeDir, ZonedDateTime creat
             int fileCount = Optional.ofNullable(properties.getProperty(FILE_COUNT_KEY))
                     .map(Integer::parseInt)
                     .orElse(-1);
-            return new SnapshotProperties(rootLocation, created, fileCount);
+            return new SnapshotProperties(rootDirLocation, created, fileCount);
         }
 
         private String toDisplayString() {
             return """
                location  : %s
                created   : %s
-               file count: %s""".formatted(rootLocation, created, fileCount);
+               file count: %s""".formatted(rootDirLocation, TimeUtils.asString(created), fileCount);
         }
 
     }

@@ -8,7 +8,7 @@ import java.time.format.DateTimeFormatter;
 public class TimeUtils {
 
     private static final ZoneId ZONE_ID = ZoneId.systemDefault();
-    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss[Z]")
+    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss")
             .withZone(ZONE_ID);
 
     public static ZonedDateTime epochStart() {

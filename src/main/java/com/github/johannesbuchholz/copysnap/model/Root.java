@@ -14,12 +14,15 @@ import java.util.Optional;
  */
 public record Root(Path pathToRootDir, Path rootDirLocation) {
 
-    public static Root from(Path path) {
-        if (!path.isAbsolute()) {
-            System.out.println("path = " + path);
-            throw new IllegalArgumentException("Path to root dir must be absolute: " + path);
+    public static Root from(Path pathToRootDir) {
+        if (!pathToRootDir.isAbsolute()) {
+            throw new IllegalArgumentException("Path to root dir must be absolute: " + pathToRootDir);
         }
-        return new Root(path, Optional.ofNullable(path.getParent()).orElse(path));
+        return new Root(pathToRootDir, Optional.ofNullable(pathToRootDir.getParent()).orElse(pathToRootDir));
+    }
+
+    public Path retrieveName() {
+        return pathToRootDir.getFileName();
     }
 
 }

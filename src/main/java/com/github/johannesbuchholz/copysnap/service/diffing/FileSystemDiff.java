@@ -26,6 +26,7 @@ public record FileSystemDiff(
 
     /**
      * @param destination the directory where the copy of the filesystem should reside in.
+     * @param oldRootLocation the directory where the old file system has been stored in. Can be {@code null}.
      */
     public Actions computeCopyActions(Path destination, Path oldRootLocation) {
         Set<CopyAction> copyActions = new HashSet<>();

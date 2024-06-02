@@ -30,11 +30,6 @@ public class AbstractLogProducer implements LogProducer {
         logConsumers.add(Objects.requireNonNull(logConsumer));
     }
 
-    @Override
-    public void removeConsumer(LogConsumer logConsumer) {
-        logConsumers.remove(logConsumer);
-    }
-
     protected void logTaskStart(Level level, String taskMessage, ZonedDateTime start, Object... keyValuePairs) {
         if (keyValuePairs.length % 2 != 0) {
             throw new IllegalArgumentException("key value pairs must be of even length: " + keyValuePairs.length);

@@ -9,14 +9,14 @@ import java.util.Optional;
 
 public class SymbolicLinkCopyAction extends AbstractCopyAction {
 
-    public SymbolicLinkCopyAction(Path sourceRoot, Path destinationRoot, Path relPath) {
-        super(sourceRoot, destinationRoot, relPath);
+    public SymbolicLinkCopyAction(Path sourceRootLocation, Path destinationRootLocation, Path relPath) {
+        super(sourceRootLocation, destinationRootLocation, relPath);
     }
 
     @Override
     public Optional<FileState> perform(FileSystemAccessor fsa) throws IOException {
-        Path absSource = sourceRoot.resolve(relPath);
-        Path absDestination = destinationRoot.resolve(relPath);
+        Path absSource = sourceRootLocation.resolve(relPath);
+        Path absDestination = destinationRootLocation.resolve(relPath);
         createParentDirs(absDestination, fsa);
         fsa.createSymbolicLink(absDestination, absSource);
         return Optional.empty();

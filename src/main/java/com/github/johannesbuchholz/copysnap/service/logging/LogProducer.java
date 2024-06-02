@@ -7,6 +7,4 @@ public interface LogProducer {
 
     void addConsumer(LogConsumer logConsumer);
 
-    void removeConsumer(LogConsumer logConsumer);
-
 }

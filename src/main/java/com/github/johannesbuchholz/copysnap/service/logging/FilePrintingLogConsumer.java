@@ -9,10 +9,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
+/**
+ * Not thread save.
+ */
 public class FilePrintingLogConsumer implements LogConsumer, AutoCloseable  {
 
     private final PrintWriter writer;
     private final Level level;
+    private boolean closed = false;
 
     public static FilePrintingLogConsumer at(Path path) {
         OutputStream os;
@@ -32,7 +36,7 @@ public class FilePrintingLogConsumer implements LogConsumer, AutoCloseable  {
 
     @Override
     public void consume(Level level, String message) {
-        if (!isLevelRelevant(level)) {
+        if (closed || !isLevelRelevant(level)) {
             return;
         }
         writer.println("[%s] %s".formatted(level, message));
@@ -45,6 +49,7 @@ public class FilePrintingLogConsumer implements LogConsumer, AutoCloseable  {
 
     @Override
     public void close() {
+        closed = true;
         writer.close();
     }
 
