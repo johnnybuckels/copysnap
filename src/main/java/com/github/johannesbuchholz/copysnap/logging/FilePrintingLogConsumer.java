@@ -1,4 +1,4 @@
-package com.github.johannesbuchholz.copysnap.service.logging;
+package com.github.johannesbuchholz.copysnap.logging;
 
 import java.io.IOException;
 import java.io.OutputStream;

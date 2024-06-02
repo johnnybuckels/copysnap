@@ -1,4 +1,4 @@
-package com.github.johannesbuchholz.copysnap.service.logging;
+package com.github.johannesbuchholz.copysnap.logging;
 
 /**
  * Implementing classes are able to consume messages.

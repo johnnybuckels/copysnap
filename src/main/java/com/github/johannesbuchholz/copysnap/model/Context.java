@@ -1,11 +1,11 @@
 package com.github.johannesbuchholz.copysnap.model;
 
+import com.github.johannesbuchholz.copysnap.logging.*;
 import com.github.johannesbuchholz.copysnap.service.diffing.FileSystemAccessor;
 import com.github.johannesbuchholz.copysnap.service.diffing.FileSystemDiff;
 import com.github.johannesbuchholz.copysnap.service.diffing.FileSystemDiffService;
 import com.github.johannesbuchholz.copysnap.service.diffing.copy.CopyAction;
 import com.github.johannesbuchholz.copysnap.service.diffing.copy.PlainCopyAction;
-import com.github.johannesbuchholz.copysnap.service.logging.*;
 import com.github.johannesbuchholz.copysnap.util.TimeUtils;
 
 import java.io.IOException;

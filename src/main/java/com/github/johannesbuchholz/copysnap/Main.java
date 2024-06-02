@@ -1,9 +1,9 @@
 package com.github.johannesbuchholz.copysnap;
 
+import com.github.johannesbuchholz.copysnap.logging.ConsolePrintingLogConsumer;
+import com.github.johannesbuchholz.copysnap.logging.Level;
 import com.github.johannesbuchholz.copysnap.model.Context;
 import com.github.johannesbuchholz.copysnap.model.Contexts;
-import com.github.johannesbuchholz.copysnap.service.logging.ConsolePrintingLogConsumer;
-import com.github.johannesbuchholz.copysnap.service.logging.Level;
 import io.github.johannesbuchholz.clihats.core.execution.CliException;
 import io.github.johannesbuchholz.clihats.core.execution.exception.CliHelpCallException;
 import io.github.johannesbuchholz.clihats.processor.annotations.Argument;
