@@ -1,6 +1,8 @@
 package com.github.johannesbuchholz.copysnap.model;
 
 import com.github.johannesbuchholz.copysnap.logging.*;
+import com.github.johannesbuchholz.copysnap.model.state.FileState;
+import com.github.johannesbuchholz.copysnap.model.state.FileSystemState;
 import com.github.johannesbuchholz.copysnap.service.diffing.FileSystemAccessor;
 import com.github.johannesbuchholz.copysnap.service.diffing.FileSystemDiff;
 import com.github.johannesbuchholz.copysnap.service.diffing.FileSystemDiffService;

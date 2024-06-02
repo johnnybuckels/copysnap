@@ -1,4 +1,4 @@
-package com.github.johannesbuchholz.copysnap.model;
+package com.github.johannesbuchholz.copysnap.model.state;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -13,10 +13,6 @@ public record CheckpointChecksum(List<Long> checksums) {
 
     private static final String CHECKSUM_SERDE_DELIMITER = ",";
     private static final CheckpointChecksum UNDEFINED_CHECKSUM = new CheckpointChecksum(List.of(-1L));
-
-    public static CheckpointChecksum undefined() {
-        return UNDEFINED_CHECKSUM;
-    }
 
     /**
      * Creates a checksum while transferring the given input stream to the specified output stream.

@@ -1,5 +1,7 @@
 package com.github.johannesbuchholz.copysnap.model;
 
+import com.github.johannesbuchholz.copysnap.model.state.CheckpointChecksum;
+import com.github.johannesbuchholz.copysnap.model.state.FileState;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;

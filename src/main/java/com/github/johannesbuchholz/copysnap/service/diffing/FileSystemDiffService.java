@@ -2,9 +2,9 @@ package com.github.johannesbuchholz.copysnap.service.diffing;
 
 import com.github.johannesbuchholz.copysnap.logging.AbstractLogProducer;
 import com.github.johannesbuchholz.copysnap.logging.Level;
-import com.github.johannesbuchholz.copysnap.model.FileState;
-import com.github.johannesbuchholz.copysnap.model.FileSystemState;
 import com.github.johannesbuchholz.copysnap.model.Root;
+import com.github.johannesbuchholz.copysnap.model.state.FileState;
+import com.github.johannesbuchholz.copysnap.model.state.FileSystemState;
 
 import java.io.IOException;
 import java.nio.file.Path;

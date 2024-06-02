@@ -1,4 +1,4 @@
-package com.github.johannesbuchholz.copysnap.model;
+package com.github.johannesbuchholz.copysnap.model.state;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;

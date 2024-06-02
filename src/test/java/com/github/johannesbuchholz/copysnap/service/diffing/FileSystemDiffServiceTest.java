@@ -1,9 +1,9 @@
 package com.github.johannesbuchholz.copysnap.service.diffing;
 
-import com.github.johannesbuchholz.copysnap.model.CheckpointChecksum;
-import com.github.johannesbuchholz.copysnap.model.FileState;
-import com.github.johannesbuchholz.copysnap.model.FileSystemState;
 import com.github.johannesbuchholz.copysnap.model.Root;
+import com.github.johannesbuchholz.copysnap.model.state.CheckpointChecksum;
+import com.github.johannesbuchholz.copysnap.model.state.FileState;
+import com.github.johannesbuchholz.copysnap.model.state.FileSystemState;
 import com.github.johannesbuchholz.copysnap.service.diffing.copy.CopyAction;
 import com.github.johannesbuchholz.copysnap.service.diffing.copy.PlainCopyAction;
 import com.github.johannesbuchholz.copysnap.service.diffing.copy.SymbolicLinkCopyAction;

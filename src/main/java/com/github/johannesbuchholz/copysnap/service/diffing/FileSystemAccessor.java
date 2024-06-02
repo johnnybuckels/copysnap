@@ -1,6 +1,6 @@
 package com.github.johannesbuchholz.copysnap.service.diffing;
 
-import com.github.johannesbuchholz.copysnap.model.CheckpointChecksum;
+import com.github.johannesbuchholz.copysnap.model.state.CheckpointChecksum;
 
 import java.io.IOException;
 import java.io.InputStream;

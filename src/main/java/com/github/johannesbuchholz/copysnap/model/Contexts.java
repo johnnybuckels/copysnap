@@ -1,6 +1,7 @@
 package com.github.johannesbuchholz.copysnap.model;
 
 import com.github.johannesbuchholz.copysnap.Main;
+import com.github.johannesbuchholz.copysnap.model.state.FileSystemState;
 
 import java.io.IOException;
 import java.io.InputStream;

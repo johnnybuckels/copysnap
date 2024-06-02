@@ -1,7 +1,7 @@
 package com.github.johannesbuchholz.copysnap.service.diffing.copy;
 
-import com.github.johannesbuchholz.copysnap.model.CheckpointChecksum;
-import com.github.johannesbuchholz.copysnap.model.FileState;
+import com.github.johannesbuchholz.copysnap.model.state.CheckpointChecksum;
+import com.github.johannesbuchholz.copysnap.model.state.FileState;
 import com.github.johannesbuchholz.copysnap.service.diffing.FileSystemAccessor;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Disabled;

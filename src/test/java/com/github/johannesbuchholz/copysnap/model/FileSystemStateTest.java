@@ -1,5 +1,8 @@
 package com.github.johannesbuchholz.copysnap.model;
 
+import com.github.johannesbuchholz.copysnap.model.state.CheckpointChecksum;
+import com.github.johannesbuchholz.copysnap.model.state.FileState;
+import com.github.johannesbuchholz.copysnap.model.state.FileSystemState;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
