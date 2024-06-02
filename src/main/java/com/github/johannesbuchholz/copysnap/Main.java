@@ -67,7 +67,7 @@ public class Main {
         Path sourceDirResolved = resolvePathToCwd(source);
 
         Context context = Contexts.createNew(sourceDirResolved, cwd);
-        context = context.write();
+        Contexts.write(context);
         CONSOLE_PRINTER.consume(Level.INFO, "Initialised context at " + context.getContextHome());
 
         setAsCurrentContext(context);
@@ -128,8 +128,8 @@ public class Main {
         context.addConsumer(CONSOLE_PRINTER);
 
         context = context.loadLatestSnapshot()
-                .createSnapshot()
-                .write();
+                .createSnapshot();
+        Contexts.write(context);
 
         setAsCurrentContext(context);
         status();
@@ -154,8 +154,8 @@ public class Main {
         }
 
         context.addConsumer(CONSOLE_PRINTER);
-        context = context.recomputeFileSystemState(resolvedPath)
-                .write();
+        context = context.recomputeFileSystemState(resolvedPath);
+        Contexts.write(context);
 
         setAsCurrentContext(context);
         status();
@@ -175,7 +175,7 @@ public class Main {
         Path resolvePath = resolvePathToCwd(path);
 
         Context minimalContext = Contexts.loadMinimal(resolvePath);
-        minimalContext = minimalContext.write();
+        Contexts.write(minimalContext);
         CONSOLE_PRINTER.consume(Level.INFO, "Repaired context at " + minimalContext.getContextHome());
 
         setAsCurrentContext(minimalContext);
@@ -196,9 +196,8 @@ public class Main {
         Context context = contextOpt.get();
         context.addConsumer(CONSOLE_PRINTER);
 
-        context = context
-                .solidify()
-                .write();
+        context = context.solidify();
+        Contexts.write(context);
 
         setAsCurrentContext(context);
         status();

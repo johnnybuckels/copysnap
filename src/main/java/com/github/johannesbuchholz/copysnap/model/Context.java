@@ -1,6 +1,5 @@
 package com.github.johannesbuchholz.copysnap.model;
 
-import com.github.johannesbuchholz.copysnap.Main;
 import com.github.johannesbuchholz.copysnap.service.diffing.FileSystemAccessor;
 import com.github.johannesbuchholz.copysnap.service.diffing.FileSystemDiff;
 import com.github.johannesbuchholz.copysnap.service.diffing.FileSystemDiffService;
@@ -11,9 +10,10 @@ import com.github.johannesbuchholz.copysnap.util.TimeUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.UncheckedIOException;
-import java.nio.file.*;
+import java.nio.file.FileVisitOption;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.HashSet;
@@ -30,10 +30,6 @@ public class Context extends AbstractLogProducer {
     private final ContextProperties properties;
     // nullable
     private final FileSystemState latest;
-
-    static final String CONTEXT_PROPERTIES_FILE_NAME = "context.properties";
-    private static final String LATEST_FILE_STATE_FILE_NAME = ".latest";
-    private static final OpenOption[] CREATE_OVERWRITE_OPEN_OPTIONS = {StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING};
 
     Context(ContextProperties properties, FileSystemState latest) {
         this(properties, latest, new HashSet<>());
@@ -70,7 +66,6 @@ public class Context extends AbstractLogProducer {
             addConsumer(report);
             logTaskStart(Level.INFO, "Creating new snapshot", start, "at", newSnapshotDir);
 
-
             FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
             logConsumers.forEach(fileSystemDiffService::addConsumer);
             FileSystemDiff.Actions copyActions = fileSystemDiffService
@@ -92,7 +87,7 @@ public class Context extends AbstractLogProducer {
     }
 
     public Context loadLatestSnapshot() {
-        Path latestSnapshotFile = properties.snapshotsHomeDir().resolve(LATEST_FILE_STATE_FILE_NAME);
+        Path latestSnapshotFile = properties.snapshotsHomeDir().resolve(Contexts.LATEST_FILE_STATE_FILE_NAME);
         ZonedDateTime start = ZonedDateTime.now();
         logTaskStart(Level.INFO, "Loading latest snapshot file system state", start, "from", latestSnapshotFile);
         if (!Files.isRegularFile(latestSnapshotFile)) {
@@ -134,7 +129,6 @@ public class Context extends AbstractLogProducer {
         return new Context(updatedProperties, newFss, logConsumers);
     }
 
-    // TODO: Move logic to separate Service and test
     public Context solidify() {
         if (properties.snapshotProperties() == null) {
             log(Level.INFO, "Unable to solidify context: No latest snapshot available.");
@@ -189,6 +183,7 @@ public class Context extends AbstractLogProducer {
             logStacktrace(Level.ERROR, e);
             throw new ContextIOException(errorMsg, e);
         }
+
         ContextProperties.SnapshotProperties snapshotProperties = new ContextProperties.SnapshotProperties(
                 newSnapshotDir, snapshotName.created(), properties.snapshotProperties().fileCount());
         ContextProperties newContextProperties = properties.withSnapshotProperties(snapshotProperties);
@@ -198,35 +193,12 @@ public class Context extends AbstractLogProducer {
         return new Context(newContextProperties, latest, logConsumers);
     }
 
-    // TODO: Move to Contexts?
-    public Context write() {
-        ZonedDateTime start = ZonedDateTime.now();
-        Path propertiesFile = properties.snapshotsHomeDir().resolve(CONTEXT_PROPERTIES_FILE_NAME);
-        logTaskStart(Level.DEBUG, "Start writing context", start, "at", propertiesFile);
-        try {
-            Files.createDirectories(propertiesFile.getParent());
-        } catch (IOException e) {
-            throw new ContextIOException("Could not create snapshot home directories at %s: %s".formatted(properties.snapshotsHomeDir(), e.getMessage()), e);
-        }
-        try (OutputStream propertiesOs = Files.newOutputStream(propertiesFile, CREATE_OVERWRITE_OPEN_OPTIONS)) {
-            properties.toProperties()
-                    .store(propertiesOs, "CopySnap properties at %s written with version %s".formatted(properties.snapshotsHomeDir(), Main.APP_VERSION));
-        } catch (IOException e) {
-            throw new ContextIOException("Could not write context properties to %s: %s".formatted(propertiesFile, e.getMessage()), e);
-        }
+    FileSystemState getLatestFileSystemState() {
+        return latest;
+    }
 
-        if (latest != null) {
-            Path latestStateFile = properties.snapshotsHomeDir().resolve(LATEST_FILE_STATE_FILE_NAME);
-            try (OutputStream fileSystemStateOs = Files.newOutputStream(latestStateFile, CREATE_OVERWRITE_OPEN_OPTIONS)) {
-                latest.write(fileSystemStateOs);
-            } catch (IOException e) {
-                throw new ContextIOException("Could not write latest file states to %s: %s".formatted(latestStateFile, e.getMessage()), e);
-            }
-        } else {
-            log(Level.DEBUG, "Writing context properties: No latest file system state");
-        }
-        logTaskEnd(Level.DEBUG, "Done writing context properties", Duration.between(start, ZonedDateTime.now()));
-        return this;
+    ContextProperties getProperties() {
+        return properties;
     }
 
     public Path getContextHome() {
