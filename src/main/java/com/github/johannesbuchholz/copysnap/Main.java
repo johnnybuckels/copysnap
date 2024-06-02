@@ -60,9 +60,7 @@ public class Main {
      * @param source The directory to take snapshots from.
      */
     @Command
-    public static void init(
-            @Argument(necessity = REQUIRED, type = OPERAND) Path source
-    ) {
+    public static void init(@Argument(necessity = REQUIRED, type = OPERAND) Path source) {
         Path cwd = Path.of(System.getProperty("user.dir"));
         Path sourceDirResolved = resolvePathToCwd(source);
 
@@ -79,9 +77,7 @@ public class Main {
      * @param path The path to the home directory of a context or its properties file.
      */
     @Command(name = "load")
-    public static void load(
-            @Argument(necessity = REQUIRED, type = OPERAND) Path path
-    ) {
+    public static void load(@Argument(necessity = REQUIRED, type = OPERAND) Path path) {
         Path searchPathResolved = resolvePathToCwd(path);
         Context context = Contexts.load(searchPathResolved);
         CONSOLE_PRINTER.consume(Level.INFO, "Loaded context " + context.getContextHome());
@@ -136,7 +132,8 @@ public class Main {
     }
 
     /**
-     * Computes the file state of a specified directory and saves it as "latest" file system state to the current context.
+     * Computes the file state of a specified directory and saves it as the latest file system state to the
+     * current context.
      * Use this method to repair a broken or lost file system state of a previous snapshot.
      * @param directory The directory to compute a new file state of.
      */
@@ -163,15 +160,13 @@ public class Main {
 
     /**
      * Loads only essential parameters from the properties at the specified path. Other parameters are reset.
-     * This method call should be followed up by 'recompute' as this method removes the latest file system state.
+     * This method call should be followed up by 'recompute' it removes the latest file system state.
      * This is useful for resolving compatibility issues between versions of context.properties files and CopySnap.
      *
      * @param path The path to the home directory of a context or its properties file.
      */
     @Command
-    public static void repair(
-            @Argument(necessity = REQUIRED, type = OPERAND) Path path
-    ) {
+    public static void reset(@Argument(necessity = REQUIRED, type = OPERAND) Path path) {
         Path resolvePath = resolvePathToCwd(path);
 
         Context minimalContext = Contexts.loadMinimal(resolvePath);
