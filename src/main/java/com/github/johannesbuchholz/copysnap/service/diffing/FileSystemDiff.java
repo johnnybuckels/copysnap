@@ -15,6 +15,7 @@ import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.TreeSet;
 
 
 public record FileSystemDiff(
@@ -62,7 +63,7 @@ public record FileSystemDiff(
             int performedCount = 0;
             PROGRESS_CONSOLE_PRINTER.update(performedCount, copyActions.size());
             FileSystemState.Builder newStateBuilder = FileSystemState.builder(stillExistingFiles);
-            for (CopyAction copyAction : copyActions) {
+            for (CopyAction copyAction : new TreeSet<>(copyActions)) {
                 log(Level.DEBUG, "Apply %s".formatted(copyAction));
                 try {
                     copyAction.perform(fsa)
