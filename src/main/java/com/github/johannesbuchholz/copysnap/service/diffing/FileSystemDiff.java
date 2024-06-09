@@ -13,9 +13,8 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.ZonedDateTime;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
+import java.util.stream.Collectors;
 
 
 public record FileSystemDiff(
@@ -42,15 +41,23 @@ public record FileSystemDiff(
         return new Actions(copyActions);
     }
 
+    public Actions plainCopiesOnly(Path destination) {
+        List<CopyAction> plainCopyActions = diffTree.getLeafs().stream()
+                .map(FileSystemNode::getPath)
+                .map(p -> new PlainCopyAction(sourceRoot.rootDirLocation(), destination, p))
+                .collect(Collectors.toList());
+        return new Actions(plainCopyActions);
+    }
+
     record DiffCounts(int newCount, int removedCount, int changedCount, int unchangedCount, int errorCount) {}
 
     public class Actions extends AbstractLogProducer {
 
         private static final ProgressConsolePrinter PROGRESS_CONSOLE_PRINTER = new ProgressConsolePrinter("Writing files");
 
-        private final Set<CopyAction> copyActions;
+        private final Collection<CopyAction> copyActions;
 
-        private Actions(Set<CopyAction> copyActions) {
+        private Actions(Collection<CopyAction> copyActions) {
             this.copyActions = copyActions;
         }
 

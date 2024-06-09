@@ -45,7 +45,7 @@ public class Context extends AbstractLogProducer {
         this.latest = latest;
     }
 
-    public Context createSnapshot() {
+    public Context createSnapshot(boolean createPlainCopiesOnly) {
         if (latest == null)
             throw new IllegalStateException("Can not create snapshot without a loaded latest file system state.");
         SnapshotName snapshotName = SnapshotName.getNew();
@@ -68,13 +68,19 @@ public class Context extends AbstractLogProducer {
         FileSystemState newState;
         try (FilePrintingLogConsumer report = FilePrintingLogConsumer.at(newSnapshotDir.resolve("report.txt"))) {
             addConsumer(report);
-            logTaskStart(Level.INFO, "Creating new snapshot", start, "at", newSnapshotDir);
+            logTaskStart(Level.INFO, "Creating new snapshot", start, "at", newSnapshotDir, "createPlainCopiesOnly", createPlainCopiesOnly);
 
             FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
             logConsumers.forEach(fileSystemDiffService::addConsumer);
-            FileSystemDiff.Actions copyActions = fileSystemDiffService
-                    .computeDiff(properties.source(), latest)
-                    .computeCopyActions(newSnapshotDir, latestRootLocation);
+            FileSystemDiff fileSystemDiff = fileSystemDiffService
+                    .computeDiff(properties.source(), latest);
+
+            FileSystemDiff.Actions copyActions;
+            if (createPlainCopiesOnly) {
+                copyActions = fileSystemDiff.plainCopiesOnly(newSnapshotDir);
+            } else {
+                copyActions = fileSystemDiff.computeCopyActions(newSnapshotDir, latestRootLocation);
+            }
             logConsumers.forEach(copyActions::addConsumer);
             newState = copyActions.apply(fsa);
         } catch (IOException e) {
@@ -88,49 +94,6 @@ public class Context extends AbstractLogProducer {
 
         logTaskEnd(Level.INFO, "Done creating new snapshot", Duration.between(start, ZonedDateTime.now()));
         return new Context(updatedProperties, newState, logConsumers);
-    }
-
-    public Context loadLatestSnapshot() {
-        Path latestSnapshotFile = properties.snapshotsHomeDir().resolve(Contexts.LATEST_FILE_STATE_FILE_NAME);
-        ZonedDateTime start = ZonedDateTime.now();
-        logTaskStart(Level.INFO, "Loading latest snapshot file system state", start, "from", latestSnapshotFile);
-        if (!Files.isRegularFile(latestSnapshotFile)) {
-            log(Level.INFO, "Could not find latest snapshot at %s. Loading with empty file system state.".formatted(latestSnapshotFile));
-            ContextProperties newProperties = properties.withSnapshotProperties(null);
-            return new Context(newProperties, FileSystemState.empty(), logConsumers);
-        }
-        FileSystemState fss;
-        try (InputStream is = Files.newInputStream(latestSnapshotFile)) {
-            fss = FileSystemState.read(is);
-        } catch (IOException e) {
-            throw new ContextIOException("Could not read latest FileSystemState from %s: %s".formatted(latestSnapshotFile, e.getMessage()), e);
-        }
-        logTaskEnd(Level.INFO, "Done loading latest snapshot file system state", Duration.between(start, ZonedDateTime.now()));
-        return new Context(properties, fss, logConsumers);
-    }
-
-    /**
-     * Intended to reproduce a file system state of an older snapshot or to repair a broken file system state.
-     * @param sourceDir The directory to compute the new state from.
-     */
-    public Context recomputeFileSystemState(Path sourceDir) {
-        Root rootToComputeStateFrom = Root.from(sourceDir);
-        ZonedDateTime start = ZonedDateTime.now();
-        logTaskStart(Level.INFO, "Recomputing file system state", start, "from", rootToComputeStateFrom.pathToRootDir());
-        FileSystemState.Builder builder = FileSystemState.builder();
-        try (Stream<Path> files = Files.walk(rootToComputeStateFrom.pathToRootDir(), FileVisitOption.FOLLOW_LINKS)) {
-            files
-                    .filter(Files::isRegularFile)
-                    .map(absPath -> FileState.readFileState(rootToComputeStateFrom.rootDirLocation(), absPath))
-                    .forEach(builder::add);
-        } catch (IOException e) {
-            throw new ContextIOException("Could not iterate over directory contents at " + rootToComputeStateFrom.pathToRootDir() + ": " + e.getMessage(), e);
-        }
-        FileSystemState newFss = builder.build();
-        ContextProperties updatedProperties = properties
-                .withSnapshotProperties(new ContextProperties.SnapshotProperties(rootToComputeStateFrom.rootDirLocation(), ZonedDateTime.now(), newFss.fileCount()));
-        logTaskEnd(Level.INFO, "Done recomputing file system state", Duration.between(start, ZonedDateTime.now()));
-        return new Context(updatedProperties, newFss, logConsumers);
     }
 
     public Context solidify() {
@@ -195,6 +158,49 @@ public class Context extends AbstractLogProducer {
         logTaskEnd(Level.INFO, "Done solidifying snapshots", Duration.between(start, ZonedDateTime.now()));
         // latest fss does not change as we did not read any new files from the source directory.
         return new Context(newContextProperties, latest, logConsumers);
+    }
+
+    public Context loadLatestSnapshot() {
+        Path latestSnapshotFile = properties.snapshotsHomeDir().resolve(Contexts.LATEST_FILE_STATE_FILE_NAME);
+        ZonedDateTime start = ZonedDateTime.now();
+        logTaskStart(Level.INFO, "Loading latest snapshot file system state", start, "from", latestSnapshotFile);
+        if (!Files.isRegularFile(latestSnapshotFile)) {
+            log(Level.INFO, "Could not find latest snapshot at %s. Loading with empty file system state.".formatted(latestSnapshotFile));
+            ContextProperties newProperties = properties.withSnapshotProperties(null);
+            return new Context(newProperties, FileSystemState.empty(), logConsumers);
+        }
+        FileSystemState fss;
+        try (InputStream is = Files.newInputStream(latestSnapshotFile)) {
+            fss = FileSystemState.read(is);
+        } catch (IOException e) {
+            throw new ContextIOException("Could not read latest FileSystemState from %s: %s".formatted(latestSnapshotFile, e.getMessage()), e);
+        }
+        logTaskEnd(Level.INFO, "Done loading latest snapshot file system state", Duration.between(start, ZonedDateTime.now()));
+        return new Context(properties, fss, logConsumers);
+    }
+
+    /**
+     * Intended to reproduce a file system state of an older snapshot or to repair a broken file system state.
+     * @param sourceDir The directory to compute the new state from.
+     */
+    public Context recomputeFileSystemState(Path sourceDir) {
+        Root rootToComputeStateFrom = Root.from(sourceDir);
+        ZonedDateTime start = ZonedDateTime.now();
+        logTaskStart(Level.INFO, "Recomputing file system state", start, "from", rootToComputeStateFrom.pathToRootDir());
+        FileSystemState.Builder builder = FileSystemState.builder();
+        try (Stream<Path> files = Files.walk(rootToComputeStateFrom.pathToRootDir(), FileVisitOption.FOLLOW_LINKS)) {
+            files
+                    .filter(Files::isRegularFile)
+                    .map(absPath -> FileState.readFileState(rootToComputeStateFrom.rootDirLocation(), absPath))
+                    .forEach(builder::add);
+        } catch (IOException e) {
+            throw new ContextIOException("Could not iterate over directory contents at " + rootToComputeStateFrom.pathToRootDir() + ": " + e.getMessage(), e);
+        }
+        FileSystemState newFss = builder.build();
+        ContextProperties updatedProperties = properties
+                .withSnapshotProperties(new ContextProperties.SnapshotProperties(rootToComputeStateFrom.rootDirLocation(), ZonedDateTime.now(), newFss.fileCount()));
+        logTaskEnd(Level.INFO, "Done recomputing file system state", Duration.between(start, ZonedDateTime.now()));
+        return new Context(updatedProperties, newFss, logConsumers);
     }
 
     FileSystemState getLatestFileSystemState() {

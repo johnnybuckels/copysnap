@@ -111,10 +111,12 @@ public class Main {
     }
 
     /**
-     * Creates a new snapshot using the currently loaded context.
+     * Creates a new differential snapshot using the currently loaded context. Files that did not change compared to the
+     * latest snapshot will only reference the respective file in that snapshot instead of creating a copy of that file.
+     * @param copy If true, the new snapshot will contain full copies of each file even if the respective file did not change.
      */
     @Command
-    public static void snapshot() {
+    public static void snapshot(@Argument(defaultValue = "false", flagValue = "true") Boolean copy) {
         Optional<Context> contextOpt = getLatestLoadedContext();
         if (contextOpt.isEmpty()) {
             CONSOLE_PRINTER.consume(Level.INFO, "No context loaded.");
@@ -124,7 +126,7 @@ public class Main {
         context.addConsumer(CONSOLE_PRINTER);
 
         context = context.loadLatestSnapshot()
-                .createSnapshot();
+                .createSnapshot(copy);
         Contexts.write(context);
 
         setAsCurrentContext(context);

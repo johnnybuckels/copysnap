@@ -6,7 +6,7 @@
 
     <groupId>com.github.johannesbuchholz</groupId>
     <artifactId>copysnap</artifactId>
-    <version>0.11.0</version>
+    <version>0.12.0</version>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
