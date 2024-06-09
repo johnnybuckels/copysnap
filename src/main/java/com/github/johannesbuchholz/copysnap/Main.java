@@ -4,16 +4,14 @@ import com.github.johannesbuchholz.copysnap.logging.ConsolePrintingLogConsumer;
 import com.github.johannesbuchholz.copysnap.logging.Level;
 import com.github.johannesbuchholz.copysnap.model.Context;
 import com.github.johannesbuchholz.copysnap.model.Contexts;
-import io.github.johannesbuchholz.clihats.core.execution.CliException;
-import io.github.johannesbuchholz.clihats.core.execution.exception.CliHelpCallException;
 import io.github.johannesbuchholz.clihats.processor.annotations.Argument;
 import io.github.johannesbuchholz.clihats.processor.annotations.Command;
 import io.github.johannesbuchholz.clihats.processor.annotations.CommandLineInterface;
 import io.github.johannesbuchholz.clihats.processor.execution.CliHats;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -46,13 +44,7 @@ public class Main {
     private static Context latestContext = null;
 
     public static void main(String[] args) {
-        try {
-            CliHats.get(Main.class).executeWithThrows(args);
-        } catch (CliHelpCallException e) {
-            CONSOLE_PRINTER.consume(Level.INFO, e.getMessage());
-        } catch (CliException e) {
-            CONSOLE_PRINTER.consume(Level.ERROR, e);
-        }
+            CliHats.get(Main.class).execute(args);
     }
 
     /**
@@ -75,11 +67,23 @@ public class Main {
     /**
      * Loads a context.
      * @param path The path to the home directory of a context or its properties file.
+     * @param reset If true, loads only essential parameters from the properties at the specified path. Other parameters are reset.
+     *              Calling this method with this option should be followed up by 'recompute' it removes the latest file system state.
+     *              This is useful for resolving compatibility issues between versions of context.properties files and CopySnap.
      */
     @Command(name = "load")
-    public static void load(@Argument(necessity = REQUIRED, type = OPERAND) Path path) {
+    public static void load(
+            @Argument(necessity = REQUIRED, type = OPERAND) Path path,
+            @Argument(defaultValue = "false", flagValue = "true", name = "--reset") Boolean reset
+    ) {
         Path searchPathResolved = resolvePathToCwd(path);
-        Context context = Contexts.load(searchPathResolved);
+        Context context;
+        if(reset) {
+            context = Contexts.loadMinimal(searchPathResolved);
+            Contexts.write(context);
+        } else  {
+            context = Contexts.load(searchPathResolved);
+        }
         CONSOLE_PRINTER.consume(Level.INFO, "Loaded context " + context.getContextHome());
 
         setAsCurrentContext(context);
@@ -116,7 +120,7 @@ public class Main {
      * @param copy If true, the new snapshot will contain full copies of each file even if the respective file did not change.
      */
     @Command
-    public static void snapshot(@Argument(defaultValue = "false", flagValue = "true") Boolean copy) {
+    public static void snapshot(@Argument(defaultValue = "false", flagValue = "true", name = "--copy") Boolean copy) {
         Optional<Context> contextOpt = getLatestLoadedContext();
         if (contextOpt.isEmpty()) {
             CONSOLE_PRINTER.consume(Level.INFO, "No context loaded.");
@@ -161,25 +165,6 @@ public class Main {
     }
 
     /**
-     * Loads only essential parameters from the properties at the specified path. Other parameters are reset.
-     * This method call should be followed up by 'recompute' it removes the latest file system state.
-     * This is useful for resolving compatibility issues between versions of context.properties files and CopySnap.
-     *
-     * @param path The path to the home directory of a context or its properties file.
-     */
-    @Command
-    public static void reset(@Argument(necessity = REQUIRED, type = OPERAND) Path path) {
-        Path resolvePath = resolvePathToCwd(path);
-
-        Context minimalContext = Contexts.loadMinimal(resolvePath);
-        Contexts.write(minimalContext);
-        CONSOLE_PRINTER.consume(Level.INFO, "Repaired context at " + minimalContext.getContextHome());
-
-        setAsCurrentContext(minimalContext);
-        status();
-    }
-
-    /**
      * Creates a copy of the current context's snapshot as a new snapshot by replacing symlinks with actual file copies.
      * The resulting snapshot will only consist of "hard" file copies.
      */
@@ -218,8 +203,8 @@ public class Main {
             properties.load(Main.class.getClassLoader().getResourceAsStream(APP_PROPERTIES_FILENAME));
             if (Files.isRegularFile(APP_PROPERTIES_PATH)) {
                 // then, load user properties
-                try (BufferedReader br = Files.newBufferedReader(APP_PROPERTIES_PATH)) {
-                    properties.load(br);
+                try (InputStream is = Files.newInputStream(APP_PROPERTIES_PATH)) {
+                    properties.load(is);
                 }
             }
         } catch (IOException e) {
@@ -242,8 +227,8 @@ public class Main {
         Path parent = APP_PROPERTIES_PATH.getParent();
         if (parent != null)
             Files.createDirectories(parent);
-        try (BufferedWriter bw = Files.newBufferedWriter(APP_PROPERTIES_PATH, StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
-            APP_PROPERTIES.store(bw, APP_NAME + " properties");
+        try (OutputStream os = Files.newOutputStream(APP_PROPERTIES_PATH, StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+            APP_PROPERTIES.store(os, APP_NAME + " properties");
         }
     }
 
