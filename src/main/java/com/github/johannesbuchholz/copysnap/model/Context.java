@@ -20,7 +20,9 @@ import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class Context extends AbstractLogProducer {
@@ -138,7 +140,7 @@ public class Context extends AbstractLogProducer {
         }
         Path latestSnapshotRootLocation = properties.snapshotProperties().rootDirLocation();
 
-        SnapshotName snapshotName = SnapshotName.getNew();
+        SnapshotName snapshotName = SnapshotName.getNew().withSuffix("s");
         Path newSnapshotDir = properties.snapshotsHomeDir().resolve(snapshotName.asString());
 
         FileSystemAccessor fsa = FileSystemAccessor.newDefaultAccessor();
@@ -211,14 +213,20 @@ public class Context extends AbstractLogProducer {
         return properties.toDisplayString();
     }
 
-    private record SnapshotName(ZonedDateTime created) {
+    private record SnapshotName(ZonedDateTime created, String suffix) {
 
         static SnapshotName getNew() {
-            return new SnapshotName(ZonedDateTime.now());
+            return new SnapshotName(ZonedDateTime.now(), null);
+        }
+
+        SnapshotName withSuffix(String suffix) {
+            return new SnapshotName(created, suffix);
         }
 
         String asString() {
-            return TimeUtils.asString(created);
+            return Stream.of(TimeUtils.asString(created), suffix)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.joining("-"));
         }
 
     }
