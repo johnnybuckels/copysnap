@@ -11,8 +11,8 @@ import java.util.regex.Pattern;
 
 public record FileState(Path path, Instant lastModified, CheckpointChecksum checksum) {
 
-    private static final String FIELD_SERDE_SEPARATOR = ";";
-    private static final Pattern FILE_STATE_STRING_PATTERN = Pattern.compile("^(?<checksum>.+);(?<modified>.+);(?<path>(?s).+)$");
+    static final String FIELD_SERDE_SEPARATOR = ";";
+    private static final Pattern FILE_STATE_STRING_PATTERN = Pattern.compile("^(?<checksum>[^;]+);(?<modified>[^;]+);(?<path>(?s).+)$");
 
     public static FileState deserialize(String fileStateString) {
         Matcher matcher = FILE_STATE_STRING_PATTERN.matcher(fileStateString);

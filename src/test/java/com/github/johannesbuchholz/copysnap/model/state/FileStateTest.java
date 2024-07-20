@@ -1,7 +1,5 @@
-package com.github.johannesbuchholz.copysnap.model;
+package com.github.johannesbuchholz.copysnap.model.state;
 
-import com.github.johannesbuchholz.copysnap.model.state.CheckpointChecksum;
-import com.github.johannesbuchholz.copysnap.model.state.FileState;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -24,10 +22,8 @@ public class FileStateTest {
     public void serde() {
         // byte is int from -128 to 127 = 255 positions
         FileState fs = generateRandomFileState();
-        System.out.println("Input: " + fs);
 
         String s = fs.serialize();
-        System.out.println("String representation: " + s);
 
         FileState fsParsed = FileState.deserialize(s);
 
@@ -38,10 +34,20 @@ public class FileStateTest {
     public void serde_withNewLineInPathName() {
         // byte is int from -128 to 127 = 255 positions
         FileState fs = new FileState(Path.of("a/b/c/x\ny\nz"), Instant.now(), new CheckpointChecksum(List.of(0L)));
-        System.out.println("Input: " + fs);
 
         String s = fs.serialize();
-        System.out.println("String representation: " + s);
+
+        FileState fsParsed = FileState.deserialize(s);
+
+        assertEquals(fs, fsParsed);
+    }
+
+    @Test
+    public void serde_withDelimiterInPathName() {
+        // byte is int from -128 to 127 = 255 positions
+        FileState fs = new FileState(Path.of("a/b/c/xyz" + FileState.FIELD_SERDE_SEPARATOR + "bli bla blubb"), Instant.now(), new CheckpointChecksum(List.of(0L)));
+
+        String s = fs.serialize();
 
         FileState fsParsed = FileState.deserialize(s);
 

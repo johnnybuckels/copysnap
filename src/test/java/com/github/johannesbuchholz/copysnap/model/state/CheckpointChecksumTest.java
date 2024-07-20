@@ -1,6 +1,5 @@
-package com.github.johannesbuchholz.copysnap.model;
+package com.github.johannesbuchholz.copysnap.model.state;
 
-import com.github.johannesbuchholz.copysnap.model.state.CheckpointChecksum;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
