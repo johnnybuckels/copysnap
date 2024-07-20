@@ -6,7 +6,8 @@
 
     <groupId>com.github.johannesbuchholz</groupId>
     <artifactId>copysnap</artifactId>
-    <version>0.13.0</version>
+    <version>0.14.0</version>
+    <description>Command line tool to create incremental snapshots of filesystems.</description>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
