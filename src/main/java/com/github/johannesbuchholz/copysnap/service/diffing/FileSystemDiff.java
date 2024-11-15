@@ -21,7 +21,7 @@ public record FileSystemDiff(
         Root sourceRoot,
         FileSystemState stillExistingFiles,
         FileSystemNode diffTree,
-        DiffCounts counts
+        Statistics statistics
 ) {
 
     /**
@@ -49,7 +49,13 @@ public record FileSystemDiff(
         return new Actions(plainCopyActions);
     }
 
-    record DiffCounts(int newCount, int removedCount, int changedCount, int unchangedCount, int errorCount) {}
+    record Statistics(int newCount, int removedCount, int changedCount, int unchangedCount, int errorCount) {
+        @Override
+        public String toString() {
+            return "Statistics: %s new, %s changed, %s removed, %s unchanged, %s erroneous"
+                    .formatted(newCount, changedCount, removedCount, unchangedCount, errorCount);
+        }
+    }
 
     public class Actions extends AbstractLogProducer {
 

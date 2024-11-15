@@ -7,7 +7,6 @@ import com.github.johannesbuchholz.copysnap.service.diffing.FileSystemAccessor;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Optional;
@@ -31,7 +30,7 @@ public class PlainCopyAction extends AbstractCopyAction {
                 OutputStream os = fsa.createNewOutputStream(absDestination)
         ) {
             checksum = CheckpointChecksum.byTransferring(is, os);
-            lastModified = Files.getLastModifiedTime(absSource).toInstant();
+            lastModified = fsa.getLastModifiedTime(absSource);
             os.flush();
         }
         return Optional.of(new FileState(relPath, lastModified, checksum));
