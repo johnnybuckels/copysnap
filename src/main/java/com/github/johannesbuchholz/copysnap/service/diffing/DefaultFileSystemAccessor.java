@@ -38,7 +38,6 @@ public class DefaultFileSystemAccessor implements FileSystemAccessor {
         Files.createDirectories(path);
     }
 
-    // FIXME: Access denied exceptions in this method abort the whole program
     @Override
     public void visitFiles(Path root, FileVisitor<Path> visitor) throws IOException {
         Files.walkFileTree(root, Set.of(FileVisitOption.FOLLOW_LINKS), Integer.MAX_VALUE, visitor);

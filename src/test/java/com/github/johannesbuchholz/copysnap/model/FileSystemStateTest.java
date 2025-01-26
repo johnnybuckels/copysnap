@@ -24,13 +24,12 @@ public class FileSystemStateTest {
     private static final int HASH_SIZE = 16;
     private static final Random RNG = new Random();
 
-    // TODO: Change to actual tmp folder when testing of tests is done
-    private static final Path TMP_FILE_PATH = Path.of(System.getProperty("user.dir")).resolve("tmp");
+    private static Path tmpFilePath;
 
     @BeforeAll
     public static void createTmpDir() throws IOException {
-        System.out.println("CREATE TEMP DIRECTORY AT " + TMP_FILE_PATH);
-        Files.createDirectories(TMP_FILE_PATH);
+        tmpFilePath = Files.createTempDirectory("copysnap_unittest");
+        System.out.println("CREATED TEMP DIRECTORY AT " + tmpFilePath);
     }
 
     @Test
@@ -46,7 +45,7 @@ public class FileSystemStateTest {
         long initEnd = System.currentTimeMillis();
 
         // when ser + de
-        Path tempFile = Files.createTempFile(TMP_FILE_PATH, "tmpfile" + System.currentTimeMillis(), ".tmp");
+        Path tempFile = Files.createTempFile(tmpFilePath, "tmpfile" + System.currentTimeMillis(), ".tmp");
         fst.write(Files.newOutputStream(tempFile));
         long serEnd = System.currentTimeMillis();
         FileSystemState deserializedFst = FileSystemState.read(Files.newInputStream(tempFile));

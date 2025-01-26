@@ -32,7 +32,6 @@ abstract class AbstractCopyAction implements CopyAction, Comparable<AbstractCopy
         return Objects.equals(sourceRootLocation, that.sourceRootLocation) && Objects.equals(destinationRootLocation, that.destinationRootLocation) && Objects.equals(relPath, that.relPath);
     }
 
-    // TODO: TEST
     @Override
     public int compareTo(AbstractCopyAction o) {
         if (o == null) {
