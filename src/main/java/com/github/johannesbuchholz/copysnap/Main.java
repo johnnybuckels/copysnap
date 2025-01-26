@@ -96,12 +96,7 @@ public class Main {
     @Command
     public static void status() {
         Optional<Context> contextOpt = getLatestLoadedContext();
-        if (contextOpt.isEmpty()) {
-            CONSOLE_PRINTER.consume(Level.INFO, "No context loaded.");
-            return;
-        }
-        Context context = contextOpt.get();
-        CONSOLE_PRINTER.consume(Level.INFO, "Current context\n" + context.toDisplayString());
+        CONSOLE_PRINTER.consume(Level.INFO, "Current context\n" + contextOpt.map(Context::toDisplayString).orElse("Not available"));
         CONSOLE_PRINTER.consume(Level.INFO, "App properties: " + APP_PROPERTIES_PATH);
         CONSOLE_PRINTER.consume(Level.INFO, "App version: " + APP_VERSION);
     }
@@ -187,11 +182,15 @@ public class Main {
 
     private static Optional<Context> getLatestLoadedContext() {
         if (latestContext == null) {
-            latestContext = Optional.ofNullable((String) APP_PROPERTIES.get(CURRENT_CONTEXT_PROPERTY_NAME))
-                    .filter(s -> !s.isBlank())
-                    .map(Path::of)
-                    .map(Contexts::load)
-                    .orElse(null);
+            try {
+                latestContext = Optional.ofNullable((String) APP_PROPERTIES.get(CURRENT_CONTEXT_PROPERTY_NAME))
+                        .filter(s -> !s.isBlank())
+                        .map(Path::of)
+                        .map(Contexts::load)
+                        .orElse(null);
+            } catch (IllegalArgumentException e) {
+                CONSOLE_PRINTER.consume(Level.ERROR, "Could not load latest context: " + e.getMessage());
+            }
         }
         return Optional.ofNullable(latestContext);
     }

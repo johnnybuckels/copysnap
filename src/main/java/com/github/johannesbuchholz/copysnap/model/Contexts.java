@@ -124,13 +124,17 @@ public class Contexts {
         if (Files.isRegularFile(path)) {
             pathToProperties = path;
         } else if (Files.isDirectory(path)) {
-            try (Stream<Path> pathStream = Files.find(path, 1, (p, bfa) -> bfa.isRegularFile() && p.getFileName().toString().equals(CONTEXT_PROPERTIES_FILE_NAME))) {
+            try (Stream<Path> pathStream = Files.find(path, 1,
+                    (p, bfa) -> bfa.isRegularFile()
+                            && p.getFileName().toString().equals(CONTEXT_PROPERTIES_FILE_NAME))
+            ) {
                 return pathStream.findFirst();
             } catch (IOException e) {
                 throw new UncheckedIOException("Could not iterate over files in " + path, e);
             }
         } else {
-            throw new IllegalArgumentException("Not a file or directory: " + path);
+            // given path is not a regular file and not a directory
+            return Optional.empty();
         }
         return Optional.of(pathToProperties);
     }
