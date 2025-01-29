@@ -69,8 +69,10 @@ if [[ ${commit} ]]; then
   # only commence if working dir is clean
   git diff-index HEAD --quiet --exit-code || (echo "Git working tree is not clean. Exiting..." && exit 1)
 
-  mvn test --quiet
-  mvn versions:set -DnewVersion="${version}" --quiet
+  mvn --quiet clean versions:set -DnewVersion="${version}"
+  mvn package
+
+  mkdir -p "releases"
   cp "target/copysnap-${version}.jar" "releases/copysnap-${version}.jar"
 
   git add pom.xml "releases/copysnap-${version}.jar"
