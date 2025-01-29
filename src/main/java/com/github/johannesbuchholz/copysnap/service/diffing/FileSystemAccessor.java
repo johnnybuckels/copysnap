@@ -5,8 +5,10 @@ import com.github.johannesbuchholz.copysnap.model.state.CheckpointChecksum;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.FileSystems;
 import java.nio.file.FileVisitor;
 import java.nio.file.Path;
+import java.nio.file.PathMatcher;
 import java.time.Instant;
 
 public interface FileSystemAccessor {
@@ -28,5 +30,9 @@ public interface FileSystemAccessor {
     void visitFiles(Path root, FileVisitor<Path> visitor) throws IOException;
 
     void createSymbolicLink(Path absDestination, Path absSource) throws IOException;
+
+    static PathMatcher getGlobPathMatcher(String globPattern) {
+        return FileSystems.getDefault().getPathMatcher("glob:" + globPattern);
+    }
 
 }

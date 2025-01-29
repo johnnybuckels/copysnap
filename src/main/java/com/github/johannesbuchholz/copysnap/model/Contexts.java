@@ -30,9 +30,9 @@ public class Contexts {
      * @param sourceDir the directory to take snapshots from.
      * @param snapshotsHomeDirLocation the directory where the new context home directory should be created in.
      */
-    public static Context createNew(Path sourceDir, Path snapshotsHomeDirLocation) {
+    public static Context createNew(Path sourceDir, Path snapshotsHomeDirLocation, String... ignorePatterns) {
         Path snapshotsHomeDir = snapshotsHomeDirLocation.resolve(sourceDir.getFileName().toString() + "-" + COPYSNAP_HOME_DIR_POSTFIX);
-        ContextProperties properties;
+        final ContextProperties properties;
         if (Files.isDirectory(snapshotsHomeDir)) {
             // if here, the context home directory already exists. Try to gracefully recreate context properties
             properties = findAndReadProperties(snapshotsHomeDir)
@@ -40,12 +40,12 @@ public class Contexts {
                         try {
                             return ContextProperties.fromProperties(props);
                         } catch (Exception e) {
-                            return ContextProperties.getNew(sourceDir, snapshotsHomeDir);
+                            return ContextProperties.getNew(sourceDir, snapshotsHomeDir, ignorePatterns);
                         }
                     })
-                    .orElse(ContextProperties.getNew(sourceDir, snapshotsHomeDir));
+                    .orElse(ContextProperties.getNew(sourceDir, snapshotsHomeDir, ignorePatterns));
         } else {
-            properties = ContextProperties.getNew(sourceDir, snapshotsHomeDir);
+            properties = ContextProperties.getNew(sourceDir, snapshotsHomeDir, ignorePatterns);
         }
         return new Context(properties, null);
     }

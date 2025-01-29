@@ -31,6 +31,10 @@ public record TestFileSystemAccessor(
 
     @Override
     public Instant getLastModifiedTime(Path p) {
+        if (lastModified.isEmpty()) {
+            // if no map is given, return any Instant.
+            return Instant.now();
+        }
         return Objects.requireNonNull(lastModified.get(p), p.toString());
     }
 
@@ -57,7 +61,7 @@ public record TestFileSystemAccessor(
     @Override
     public void visitFiles(Path root, FileVisitor<Path> visitor) throws IOException {
         for (Path p : pathsByRootDir.get(root)) {
-            Instant lmt = Objects.requireNonNull(lastModified.get(p));
+            Instant lmt = getLastModifiedTime(p);
             visitor.visitFile(p, new DummyFileAttribute(lmt));
         }
     }

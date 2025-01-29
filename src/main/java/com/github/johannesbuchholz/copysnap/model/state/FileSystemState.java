@@ -75,7 +75,7 @@ public class FileSystemState {
     /**
      * @return A new state with all states from this that are contained in the specified paths.
      */
-    public FileSystemState newByRemovingMissing(Set<Path> otherPaths) {
+    public FileSystemState newBySetUnion(Set<Path> otherPaths) {
         Builder builder = FileSystemState.builder(this);
         statesByPath.keySet().stream()
                 .filter(not(otherPaths::contains))

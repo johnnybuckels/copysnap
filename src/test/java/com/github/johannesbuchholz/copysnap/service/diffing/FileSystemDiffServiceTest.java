@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -60,7 +61,7 @@ public class FileSystemDiffServiceTest {
                 .build();
 
         FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
-        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(sourceRoot, fssOld);
+        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(sourceRoot, fssOld, List.of());
         Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination, rootOld).getActions();
 
         // then
@@ -70,7 +71,7 @@ public class FileSystemDiffServiceTest {
          */
         CopyAction expectedAction = new PlainCopyAction(sourceRoot.rootDirLocation(), destination, file);
         assertEquals(Set.of(expectedAction), copyActions);
-        assertEquals(new FileSystemDiff.Statistics(0, 0, 1, 0, 0), fileSystemDiff.statistics());
+        assertEquals(new FileSystemDiff.Statistics(0, 0, 1, 0, 0, 0), fileSystemDiff.statistics());
     }
 
 
@@ -100,7 +101,7 @@ public class FileSystemDiffServiceTest {
                 .setPathsByRootDir(Map.of(sourceRoot.pathToRootDir(), List.of(sourceRoot.rootDirLocation().resolve(file))))
                 .build();
         FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
-        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(sourceRoot, fssOld);
+        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(sourceRoot, fssOld, List.of());
         Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination, rootOld).getActions();
 
         // then
@@ -110,7 +111,7 @@ public class FileSystemDiffServiceTest {
          */
         CopyAction expectedAction = new SymbolicLinkCopyAction(rootOld, destination, Path.of("r"));
         assertEquals(Set.of(expectedAction), copyActions);
-        assertEquals(new FileSystemDiff.Statistics(0, 0, 0, 1, 0), fileSystemDiff.statistics());
+        assertEquals(new FileSystemDiff.Statistics(0, 0, 0, 1, 0, 0), fileSystemDiff.statistics());
 
     }
 
@@ -185,7 +186,7 @@ public class FileSystemDiffServiceTest {
                                 sourceRoot.rootDirLocation().resolve(fileUnchanged))))
                 .build();
         FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
-        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(sourceRoot, fssOld);
+        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(sourceRoot, fssOld, List.of());
         Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination, rootOld.rootDirLocation()).getActions();
 
         // then
@@ -201,7 +202,7 @@ public class FileSystemDiffServiceTest {
          */
         CopyAction expectedCopyAction = new PlainCopyAction(sourceRoot.rootDirLocation(), destination, fileChanged);
         assertEquals(Set.of(expectedAliasAction, expectedCopyAction), copyActions);
-        assertEquals(new FileSystemDiff.Statistics(0, 0, 1, 1, 0), fileSystemDiff.statistics());
+        assertEquals(new FileSystemDiff.Statistics(0, 0, 1, 1, 0, 0), fileSystemDiff.statistics());
     }
 
 
@@ -254,7 +255,7 @@ public class FileSystemDiffServiceTest {
                 .setPathsByRootDir(Map.of(sourceRoot.pathToRootDir(), List.of(sourceRoot.rootDirLocation().resolve(fileChanged))))
                 .build();
         FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
-        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(sourceRoot, fssOld);
+        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(sourceRoot, fssOld, List.of());
         Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination, rootOld).getActions();
 
         // then
@@ -264,7 +265,7 @@ public class FileSystemDiffServiceTest {
          */
         CopyAction expectedCopyAction = new PlainCopyAction(sourceRoot.rootDirLocation(), destination, fileChanged);
         assertEquals(Set.of(expectedCopyAction), copyActions);
-        assertEquals(new FileSystemDiff.Statistics(0, 1, 1, 0, 0), fileSystemDiff.statistics());
+        assertEquals(new FileSystemDiff.Statistics(0, 1, 1, 0, 0, 0), fileSystemDiff.statistics());
     }
 
 
@@ -314,14 +315,45 @@ public class FileSystemDiffServiceTest {
                 .setPathsByRootDir(Map.of(sourceRoot.pathToRootDir(), List.of(sourceRoot.rootDirLocation().resolve(unchangedFile))))
                 .build();
         FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
-        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(sourceRoot, fssOld);
+        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(sourceRoot, fssOld, List.of());
         Set<CopyAction> copyActions = fileSystemDiff.computeCopyActions(destination, rootOld.rootDirLocation()).getActions();
 
         // then
         CopyAction expectedCopyAction = new SymbolicLinkCopyAction(rootOld.rootDirLocation(), destination, unchangedFile);
 
         assertEquals(Set.of(expectedCopyAction), copyActions);
-        assertEquals(new FileSystemDiff.Statistics(0, 1, 0, 1, 0), fileSystemDiff.statistics());
+        assertEquals(new FileSystemDiff.Statistics(0, 1, 0, 1, 0, 0), fileSystemDiff.statistics());
+    }
+
+    @Test
+    void test_withIgnoredFiles() throws IOException {
+        // given
+        String globPattern1 = "**/*.txt";
+        String globPattern2 = "**.yaml";
+        List<String> paths = List.of("/x/y/z/file.txt", "/y/z/file.txt", "/y/file.txt", "/y/file.txt", "/x/y", "/x/y/blubb.yaml", "/other-file.txt");
+
+        // when diff on simple file system state:
+        //   fsa returns the given list of paths, existing file system state is empty (all paths are "new")
+        Path rootDir = Path.of("/");
+        TestFileSystemAccessor fileSystemAccessor = TestFileSystemAccessor.builder()
+                .setPathsByRootDir(Map.of(rootDir, paths.stream().map(Path::of).toList()))
+                .build();
+
+        FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fileSystemAccessor);
+        FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(
+                Root.from(rootDir),
+                FileSystemState.empty(),
+                List.of(globPattern1, globPattern2));
+
+        // then
+        Set<Path> remaining = fileSystemDiff.diffTree().getLeafs().stream()
+                .map(FileSystemNode::getPath)
+                .collect(Collectors.toSet());
+        assertEquals(Set.of(Path.of("x/y"), Path.of("other-file.txt")), remaining);
+
+        assertEquals(
+                new FileSystemDiff.Statistics(2, 0, 0, 0, 5, 0),
+                fileSystemDiff.statistics());
     }
 
     private CheckpointChecksum checksum(String stringContent) {

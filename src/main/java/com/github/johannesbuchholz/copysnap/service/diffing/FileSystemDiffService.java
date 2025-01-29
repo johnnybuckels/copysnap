@@ -9,12 +9,14 @@ import com.github.johannesbuchholz.copysnap.model.state.FileSystemState;
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Path;
+import java.nio.file.PathMatcher;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -34,7 +36,7 @@ public class FileSystemDiffService extends AbstractLogProducer {
      *
      * @param sourceRoot The root object to take a snapshot from.
      */
-    public FileSystemDiff computeDiff(Root sourceRoot, FileSystemState oldSystemState) throws IOException {
+    public FileSystemDiff computeDiff(Root sourceRoot, FileSystemState oldSystemState, List<String> excludeGlobPatterns) throws IOException {
         ZonedDateTime start = ZonedDateTime.now();
         logTaskStart(Level.INFO, "Computing file differences", start, "at", sourceRoot.pathToRootDir());
 
@@ -42,6 +44,7 @@ public class FileSystemDiffService extends AbstractLogProducer {
                 sourceRoot,
                 oldSystemState,
                 fileSystemAccessor,
+                excludeGlobPatterns,
                 this::logFileVisitingError,
                 msg -> log(Level.DEBUG, msg)
         );
@@ -68,6 +71,7 @@ public class FileSystemDiffService extends AbstractLogProducer {
         private final AtomicInteger newCount = new AtomicInteger();
         private final AtomicInteger changedCount = new AtomicInteger();
         private final AtomicInteger unchangedCount = new AtomicInteger();
+        private final AtomicInteger ignoredCount = new AtomicInteger();
         private final AtomicInteger errorCount = new AtomicInteger();
 
         private final Root sourceRoot;
@@ -75,6 +79,7 @@ public class FileSystemDiffService extends AbstractLogProducer {
         private final FileSystemAccessor fileSystemAccessor;
         private final BiConsumer<Path, IOException> exceptionHandler;
         private final Consumer<String> messageHandler;
+        private final List<PathMatcher> ignorePathMatchers;
 
         private final Set<Path> processedNewFiles = new HashSet<>();
         private final FileSystemNode systemDiffTree = FileSystemNode.getNew();
@@ -83,39 +88,61 @@ public class FileSystemDiffService extends AbstractLogProducer {
                 Root sourceRoot,
                 FileSystemState oldSystemState,
                 FileSystemAccessor fileSystemAccessor,
+                List<String> ignoreGlobPatterns,
                 BiConsumer<Path, IOException> exceptionHandler, Consumer<String> messageHandler) {
             this.sourceRoot = sourceRoot;
             this.oldSystemState = oldSystemState;
             this.fileSystemAccessor = fileSystemAccessor;
             this.exceptionHandler = exceptionHandler;
             this.messageHandler = messageHandler;
+            ignorePathMatchers = ignoreGlobPatterns.stream().map(FileSystemAccessor::getGlobPathMatcher).toList();
+        }
+
+        @Override
+        public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+            // compute relative dir as we do not want to exclude on components includes in the source root
+            Path relDir = sourceRoot.rootDirLocation().relativize(dir);
+            if (isExcluded(relDir)) {
+                ignoredCount.getAndIncrement();
+                messageHandler.accept("IGNORED (including subtree): " + relDir);
+                return FileVisitResult.SKIP_SUBTREE;
+            }
+            return FileVisitResult.CONTINUE;
         }
 
         @Override
         public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
             Path currentNewPath = sourceRoot.rootDirLocation().relativize(file);
 
-            // determine changed existing changed files
-            FileSystemNode newNode = systemDiffTree.insert(currentNewPath);
-            try {
-                switch (determineChange(oldSystemState, sourceRoot.rootDirLocation(), currentNewPath, attrs)) {
-                    case UNCHANGED -> unchangedCount.getAndIncrement();
-                    case CHANGED -> {
-                        changedCount.getAndIncrement();
-                        newNode.markAsChanged();
+            if (isExcluded(currentNewPath)) {
+                ignoredCount.getAndIncrement();
+                messageHandler.accept("IGNORED: " + currentNewPath);
+            } else {
+                FileSystemNode newNode = systemDiffTree.insert(currentNewPath);
+                try {
+                    switch (determineChange(oldSystemState, sourceRoot.rootDirLocation(), currentNewPath, attrs)) {
+                        case UNCHANGED -> unchangedCount.getAndIncrement();
+                        case CHANGED -> {
+                            changedCount.getAndIncrement();
+                            newNode.markAsChanged();
+                        }
+                        case NEW -> {
+                            newCount.getAndIncrement();
+                            newNode.markAsChanged();
+                        }
                     }
-                    case NEW -> {
-                        newCount.getAndIncrement();
-                        newNode.markAsChanged();
-                    }
+                } catch (IOException e) {
+                    errorCount.getAndIncrement();
+                    newNode.markAsChanged();
+                    exceptionHandler.accept(file, e);
                 }
-            } catch (IOException e) {
-                errorCount.getAndIncrement();
-                newNode.markAsChanged();
-                exceptionHandler.accept(file, e);
             }
             processedNewFiles.add(currentNewPath);
             return FileVisitResult.CONTINUE;
+        }
+
+        private boolean isExcluded(Path path) {
+            return ignorePathMatchers.stream().anyMatch(matcher -> matcher.matches(path));
         }
 
         private FileChangeState determineChange(
@@ -159,21 +186,22 @@ public class FileSystemDiffService extends AbstractLogProducer {
 
         public FileSystemDiff collectDiffResults() {
             // determine no longer present files and mark former containing directories as changed
-            FileSystemState remainingStates = oldSystemState.newByRemovingMissing(processedNewFiles);
-            FileSystemState removedStates = oldSystemState.newBySetMinus(remainingStates);
+            FileSystemState oldStatesOfNotDeletedFiles = oldSystemState.newBySetUnion(processedNewFiles);
+            FileSystemState removedStates = oldSystemState.newBySetMinus(oldStatesOfNotDeletedFiles);
             for (Path noLongerPresentPath : removedStates.paths()) {
                 systemDiffTree.getDeepestKnownAlong(noLongerPresentPath).markAsChanged();
             }
 
             return new FileSystemDiff(
                     sourceRoot,
-                    remainingStates,
+                    oldStatesOfNotDeletedFiles,
                     systemDiffTree,
                     new FileSystemDiff.Statistics(
                             newCount.get(),
                             removedStates.fileCount(),
                             changedCount.get(),
                             unchangedCount.get(),
+                            ignoredCount.get(),
                             errorCount.get()));
         }
 

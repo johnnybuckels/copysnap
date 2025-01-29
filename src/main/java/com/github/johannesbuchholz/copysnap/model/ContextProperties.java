@@ -4,17 +4,28 @@ import com.github.johannesbuchholz.copysnap.util.TimeUtils;
 
 import java.nio.file.Path;
 import java.time.ZonedDateTime;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 
-record ContextProperties(Root source, Path snapshotsHomeDir, ZonedDateTime created, /* nullable */ SnapshotProperties snapshotProperties) {
+record ContextProperties(
+        Root source,
+        Path snapshotsHomeDir,
+        ZonedDateTime created,
+        List<String> ignorePathGlobPatterns,
+        /* nullable */
+        SnapshotProperties snapshotProperties
+) {
 
     static final String SOURCE_DIR_KEY = "sourceDir";
     private static final String SNAPSHOTS_HOME_DIR_KEY = "snapshotsHomeDir";
     private static final String CREATED_KEY = "created";
+    private static final String IGNORE_KEY = "ignore";
+    private static final String IGNORE_PATTERN_DELIMITER = ":";
 
-    static ContextProperties getNew(Path sourceDir, Path snapshotsHomeDir) {
-        return new ContextProperties(Root.from(sourceDir), snapshotsHomeDir, ZonedDateTime.now(), null);
+    static ContextProperties getNew(Path sourceDir, Path snapshotsHomeDir, String... ignorePatterns) {
+        return new ContextProperties(Root.from(sourceDir), snapshotsHomeDir, ZonedDateTime.now(), List.of(ignorePatterns), null);
     }
 
     static ContextProperties fromProperties(Properties properties) {
@@ -28,8 +39,11 @@ record ContextProperties(Root source, Path snapshotsHomeDir, ZonedDateTime creat
         ZonedDateTime created = Optional.ofNullable(properties.getProperty(CREATED_KEY))
                 .map(TimeUtils::fromString)
                 .orElseThrow(() -> illegalPropertiesException(properties, CREATED_KEY));
+        List<String> excludedSubPaths = Optional.ofNullable(properties.getProperty(IGNORE_KEY))
+                .map(excludedPathString -> Arrays.stream(excludedPathString.split(IGNORE_PATTERN_DELIMITER)).toList())
+                .orElse(List.of());
         SnapshotProperties snapshotProperties = SnapshotProperties.fromProperties(properties);
-        return new ContextProperties(source, snapshotsHomeDir, created, snapshotProperties);
+        return new ContextProperties(source, snapshotsHomeDir, created, excludedSubPaths, snapshotProperties);
     }
 
     private static IllegalPropertiesException illegalPropertiesException(Properties properties, String key) {
@@ -41,6 +55,7 @@ record ContextProperties(Root source, Path snapshotsHomeDir, ZonedDateTime creat
         properties.put(SOURCE_DIR_KEY, source.pathToRootDir().toString());
         properties.put(SNAPSHOTS_HOME_DIR_KEY, snapshotsHomeDir.toString());
         properties.put(CREATED_KEY, TimeUtils.asString(created));
+        properties.put(IGNORE_KEY, String.join(IGNORE_PATTERN_DELIMITER, ignorePathGlobPatterns));
         if(snapshotProperties != null) {
             properties.putAll(snapshotProperties.toProperties());
         }
@@ -52,13 +67,15 @@ record ContextProperties(Root source, Path snapshotsHomeDir, ZonedDateTime creat
                 source : %s
                 home   : %s
                 created: %s
+                ignore : %s
                 latest snapshot
                 %s""".formatted(source.pathToRootDir(), snapshotsHomeDir, TimeUtils.asString(created),
+                ignorePathGlobPatterns.isEmpty() ? "None" : String.join(IGNORE_PATTERN_DELIMITER, ignorePathGlobPatterns),
                 snapshotProperties == null ? "none".indent(4).stripTrailing() : snapshotProperties.toDisplayString().indent(4).stripTrailing());
     }
 
     public ContextProperties withSnapshotProperties(SnapshotProperties snapshotProperties) {
-        return new ContextProperties(source, snapshotsHomeDir, created, snapshotProperties);
+        return new ContextProperties(source, snapshotsHomeDir, created, ignorePathGlobPatterns, snapshotProperties);
     }
 
     record SnapshotProperties(Path rootDirLocation, ZonedDateTime created, int fileCount) {
@@ -67,7 +84,7 @@ record ContextProperties(Root source, Path snapshotsHomeDir, ZonedDateTime creat
         private static final String CREATED_KEY = "latestSnapshotCreated";
         private static final String FILE_COUNT_KEY = "latestSnapshotFileCount";
 
-        private Properties toProperties() {
+        Properties toProperties() {
             Properties properties = new Properties();
             properties.put(ROOT_LOCATION_KEY, rootDirLocation.toString());
             properties.put(CREATED_KEY, TimeUtils.asString(created));
@@ -75,7 +92,7 @@ record ContextProperties(Root source, Path snapshotsHomeDir, ZonedDateTime creat
             return properties;
         }
 
-        private static SnapshotProperties fromProperties(Properties properties) throws IllegalPropertiesException {
+        static SnapshotProperties fromProperties(Properties properties) throws IllegalPropertiesException {
             if (!properties.containsKey(ROOT_LOCATION_KEY)) {
                 return null;
             }
@@ -91,7 +108,7 @@ record ContextProperties(Root source, Path snapshotsHomeDir, ZonedDateTime creat
             return new SnapshotProperties(rootDirLocation, created, fileCount);
         }
 
-        private String toDisplayString() {
+        String toDisplayString() {
             return """
                location  : %s
                created   : %s

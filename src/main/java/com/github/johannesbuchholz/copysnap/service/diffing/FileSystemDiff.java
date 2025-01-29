@@ -16,10 +16,9 @@ import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
-
 public record FileSystemDiff(
         Root sourceRoot,
-        FileSystemState stillExistingFiles,
+        FileSystemState oldStatesOfNotDeletedFiles,
         FileSystemNode diffTree,
         Statistics statistics
 ) {
@@ -49,11 +48,18 @@ public record FileSystemDiff(
         return new Actions(plainCopyActions);
     }
 
-    record Statistics(int newCount, int removedCount, int changedCount, int unchangedCount, int errorCount) {
+    record Statistics(int newCount, int removedCount, int changedCount, int unchangedCount, int ignoredCount, int errorCount) {
         @Override
         public String toString() {
-            return "Statistics: %s new, %s changed, %s removed, %s unchanged, %s erroneous"
-                    .formatted(newCount, changedCount, removedCount, unchangedCount, errorCount);
+            return """
+                    File count statistics:
+                        new: %s
+                        changed: %s
+                        removed: %s
+                        unchanged: %s
+                        ignored: %s
+                        erroneous: %s"""
+                    .formatted(newCount, changedCount, removedCount, unchangedCount, ignoredCount, errorCount);
         }
     }
 
@@ -75,7 +81,7 @@ public record FileSystemDiff(
             logTaskStart(Level.INFO, "Applying copy actions", start, "count", copyActions.size());
             int performedCount = 0;
             PROGRESS_CONSOLE_PRINTER.update(performedCount, copyActions.size());
-            FileSystemState.Builder newStateBuilder = FileSystemState.builder(stillExistingFiles);
+            FileSystemState.Builder newStateBuilder = FileSystemState.builder(oldStatesOfNotDeletedFiles);
             for (CopyAction copyAction : new TreeSet<>(copyActions)) {
                 log(Level.DEBUG, "Apply %s".formatted(copyAction));
                 try {

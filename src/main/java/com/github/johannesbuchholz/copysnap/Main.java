@@ -21,6 +21,7 @@ import java.util.Optional;
 import java.util.Properties;
 
 import static io.github.johannesbuchholz.clihats.processor.annotations.Argument.Necessity.REQUIRED;
+import static io.github.johannesbuchholz.clihats.processor.annotations.Argument.Type.ARRAY_OPERAND;
 import static io.github.johannesbuchholz.clihats.processor.annotations.Argument.Type.OPERAND;
 
 /**
@@ -50,13 +51,16 @@ public class Main {
     /**
      * Initialises a new CopySnap context sourcing the specified directory.
      * @param source The directory to take snapshots from.
+     * @param ignore Glob patterns of files to exclude from this context. Such files are not part of any snapshot.
      */
     @Command
-    public static void init(@Argument(necessity = REQUIRED, type = OPERAND) Path source) {
+    public static void init(
+            @Argument(necessity = REQUIRED, type = OPERAND) Path source,
+            @Argument(type = ARRAY_OPERAND) String... ignore
+    ) {
         Path cwd = Path.of(System.getProperty("user.dir"));
         Path sourceDirResolved = resolvePathToCwd(source);
-
-        Context context = Contexts.createNew(sourceDirResolved, cwd);
+        Context context = Contexts.createNew(sourceDirResolved, cwd, ignore);
         Contexts.write(context);
         CONSOLE_PRINTER.consume(Level.INFO, "Initialised context at " + context.getContextHome());
 
@@ -68,7 +72,7 @@ public class Main {
      * Loads a context.
      * @param path The path to the home directory of a context or its properties file.
      * @param reset If true, loads only essential parameters from the properties at the specified path. Other parameters are reset.
-     *              Calling this method with this option should be followed up by 'recompute' it removes the latest file system state.
+     *              Calling this method with this option removes the latest file system state and should be followed up by 'recompute'.
      *              This is useful for resolving compatibility issues between versions of context.properties files and CopySnap.
      */
     @Command(name = "load")

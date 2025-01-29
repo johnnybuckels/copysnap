@@ -72,8 +72,7 @@ public class Context extends AbstractLogProducer {
 
             FileSystemDiffService fileSystemDiffService = new FileSystemDiffService(fsa);
             logConsumers.forEach(fileSystemDiffService::addConsumer);
-            FileSystemDiff fileSystemDiff = fileSystemDiffService
-                    .computeDiff(properties.source(), latest);
+            FileSystemDiff fileSystemDiff = fileSystemDiffService.computeDiff(properties.source(), latest, properties.ignorePathGlobPatterns());
 
             FileSystemDiff.Actions copyActions;
             if (createPlainCopiesOnly) {
@@ -225,7 +224,7 @@ public class Context extends AbstractLogProducer {
             return new SnapshotName(ZonedDateTime.now(), null);
         }
 
-        SnapshotName withSuffix(String suffix) {
+        SnapshotName withSuffix(/* nullable */ String suffix) {
             return new SnapshotName(created, suffix);
         }
 
