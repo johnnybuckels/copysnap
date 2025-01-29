@@ -6,7 +6,7 @@
 
     <groupId>com.github.johannesbuchholz</groupId>
     <artifactId>copysnap</artifactId>
-    <version>0.15.0</version>
+    <version>0.16.0</version>
     <description>Command line tool to create incremental snapshots of filesystems.</description>
 
     <properties>
